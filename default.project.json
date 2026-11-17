@@ -1,14 +1,21 @@
 {
-  "name": "BPH",
-  "emitLegacyScripts": false,
+  "name": "Packvania",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Shared": { "$path": "src/shared" },
-      "Client": { "$path": "src/client" }
+      "Shared": {
+        "$path": "src/shared"
+      }
     },
     "ServerScriptService": {
-      "Server": { "$path": "src/server" }
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/client"
+      }
     }
   }
 }

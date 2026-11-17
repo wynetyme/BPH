@@ -1,6 +1,5 @@
 --!strict
--- The earned starter table is UNVERIFIED_PLACEHOLDER. It is not demo 60/30/9/1 and not release odds.
--- legendary.booster uses the same weights on two slots. That is a designed balance, not measured release odds.
+-- Designed Packvania weights. Not demo 60/30/9/1 and not measured release odds.
 
 local Types = require("../contracts/Types")
 local CardDefinitions = require("./CardDefinitions")
@@ -8,75 +7,57 @@ local Result = require("../contracts/Result")
 
 export type PackDefinition = Types.PackDefinition
 
-local EARNED: { PackDefinition } = {
-	{
-		id = "placeholder.starter",
-		displayName = "Placeholder Starter Pack",
-		verification = "UNVERIFIED_PLACEHOLDER",
-		slots = 1,
-		earnedCost = {
-			status = "UNVERIFIED_PLACEHOLDER",
-			currency = "coins",
-			amount = 10,
-		},
-		outcomes = {
-			{ cardId = "placeholder.frontline", weight = 1 },
-			{ cardId = "placeholder.bolt", weight = 1 },
-		},
-	},
-}
-
--- Free pack: 1 slot, weights 1 and 1, expected 0.50 Frontline and 0.50 Bolt.
--- Legendary: those same weights on 2 independent slots, expected 1.00 and 1.00.
-local LEGENDARY: PackDefinition = {
-	id = "legendary.booster",
-	displayName = "Legendary Booster Pack",
-	verification = "UNVERIFIED_PLACEHOLDER",
-	slots = 2,
-	earnedCost = {
-		status = "UNVERIFIED_PLACEHOLDER",
-		currency = "coins",
-		amount = 1,
-	},
-	outcomes = {
-		{ cardId = "placeholder.frontline", weight = 1 },
-		{ cardId = "placeholder.bolt", weight = 1 },
-	},
-}
-
--- Same weights as the free starter. Locked until a placeholder realm clear. Not a measured pack.
-local GATE: PackDefinition = {
-	id = "placeholder.gate",
-	displayName = "Placeholder Gate Pack",
+local NIGHT: PackDefinition = {
+	id = "packvania.night",
+	displayName = "Night Pack",
 	verification = "UNVERIFIED_PLACEHOLDER",
 	slots = 1,
-	earnedCost = {
-		status = "UNVERIFIED_PLACEHOLDER",
-		currency = "coins",
-		amount = 10,
+	earnedCost = { status = "UNVERIFIED_PLACEHOLDER", currency = "coins", amount = 10 },
+	outcomes = {
+		{ cardId = "packvania.warden", weight = 2 },
+		{ cardId = "packvania.bolt", weight = 2 },
+		{ cardId = "packvania.keeper", weight = 1 },
+		{ cardId = "packvania.gargoyle", weight = 1 },
 	},
-	outcomes = EARNED[1].outcomes,
 }
 
-local byId: { [string]: PackDefinition } = {}
-for _, pack in EARNED do
-	byId[pack.id] = pack
-end
-byId[LEGENDARY.id] = LEGENDARY
-byId[GATE.id] = GATE
+-- Same weights, two independent slots. A distinct pack edition.
+local MOONLIT: PackDefinition = {
+	id = "packvania.moonlit",
+	displayName = "Moonlit Booster",
+	verification = "UNVERIFIED_PLACEHOLDER",
+	slots = 2,
+	earnedCost = { status = "UNVERIFIED_PLACEHOLDER", currency = "coins", amount = 1 },
+	outcomes = NIGHT.outcomes,
+}
+
+local CHAPEL: PackDefinition = {
+	id = "packvania.chapel",
+	displayName = "Chapel Pack",
+	verification = "UNVERIFIED_PLACEHOLDER",
+	slots = 1,
+	earnedCost = { status = "UNVERIFIED_PLACEHOLDER", currency = "coins", amount = 10 },
+	outcomes = NIGHT.outcomes,
+}
+
+local byId: { [string]: PackDefinition } = {
+	[NIGHT.id] = NIGHT,
+	[MOONLIT.id] = MOONLIT,
+	[CHAPEL.id] = CHAPEL,
+}
 
 local PackDefinitions = {}
 
 function PackDefinitions.list(): { PackDefinition }
-	return EARNED
+	return { NIGHT }
 end
 
 function PackDefinitions.paidPack(): PackDefinition
-	return LEGENDARY
+	return MOONLIT
 end
 
 function PackDefinitions.gatePack(): PackDefinition
-	return GATE
+	return CHAPEL
 end
 
 function PackDefinitions.get(packId: string): PackDefinition?
@@ -91,10 +72,7 @@ function PackDefinitions.validate(pack: PackDefinition): Result.Result<PackDefin
 	if pack.slots < 1 or not PackDefinitions.isInteger(pack.slots) then
 		return Result.err("InvalidPack")
 	end
-	if pack.earnedCost.currency ~= "coins" then
-		return Result.err("InvalidPack")
-	end
-	if not PackDefinitions.isInteger(pack.earnedCost.amount) or pack.earnedCost.amount < 1 then
+	if pack.earnedCost.currency ~= "coins" or not PackDefinitions.isInteger(pack.earnedCost.amount) or pack.earnedCost.amount < 1 then
 		return Result.err("InvalidPack")
 	end
 	if #pack.outcomes < 1 then
@@ -114,16 +92,14 @@ function PackDefinitions.validate(pack: PackDefinition): Result.Result<PackDefin
 end
 
 function PackDefinitions.validateShipping(): Result.Result<{ PackDefinition }>
-	for _, pack in EARNED do
-		local validated = PackDefinitions.validate(pack)
-		if not validated.ok then
-			return validated
-		end
-		if pack.verification ~= "UNVERIFIED_PLACEHOLDER" then
-			return Result.err("ShippingPackMustStayUnverified")
-		end
+	local validated = PackDefinitions.validate(NIGHT)
+	if not validated.ok then
+		return validated
 	end
-	return Result.ok(EARNED)
+	if NIGHT.verification ~= "UNVERIFIED_PLACEHOLDER" then
+		return Result.err("ShippingPackMustStayUnverified")
+	end
+	return Result.ok({ NIGHT })
 end
 
 return PackDefinitions

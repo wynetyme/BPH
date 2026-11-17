@@ -1,6 +1,5 @@
-# Third-party hooks are installed locally; the hook config may contain absolute paths.
-.third_party/
-.cursor/hooks.json
-.cursor/hooks.json.bak-before-ponytail
-node_modules/
-build/
+sourcemap.json
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+/tmp/

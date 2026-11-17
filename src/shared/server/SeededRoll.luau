@@ -1,5 +1,4 @@
 --!strict
--- Deterministic integer generator. The server picks the seed. Clients never send one.
 
 local SeededRoll = {}
 

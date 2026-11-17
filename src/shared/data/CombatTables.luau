@@ -1,181 +1,148 @@
 --!strict
--- CONFIGURABLE_PLACEHOLDER combat numbers. Source-game stats, path, and timing are UNKNOWN.
--- Observed rules kept: waves threaten a tower, survival pays Mastery, Mastery upgrades a hero or spell,
--- and a clear unlocks another pack and a realm. Targeting "first" is the tower-defense default, not a measured BPH rule.
+-- UNVERIFIED_DESIGNED Packvania tuning. Not measured Booster Pack Heroes stats.
 
 local CombatTables = {}
 
-export type Vec = { x: number, y: number }
-export type Segment = { from: Vec, to: Vec, length: number, start: number }
+CombatTables.status = "UNVERIFIED_DESIGNED"
 
-CombatTables.status = "UNVERIFIED_PLACEHOLDER"
-CombatTables.tick = 0.05
-CombatTables.maxTicks = 2000
-CombatTables.towerMaxHp = 15
-CombatTables.upgradeCost = 5
-CombatTables.maxRank = 3
+local PATH = 36
+local TICK = 1
+local TOWER = 10
+local MAX_TICKS = 80
+local UPGRADE = 5
 
-local PATH: { Vec } = {
-	{ x = 0, y = 0 },
-	{ x = 60, y = 0 },
-	{ x = 60, y = 20 },
+local ANCHORS = {
+	["lane.back"] = 8,
+	["lane.mid"] = 16,
+	["lane.front"] = 24,
 }
 
-local function buildSegments(points: { Vec }): ({ Segment }, number)
-	local segments: { Segment } = {}
-	local total = 0
-	for index = 1, #points - 1 do
-		local from = points[index]
-		local to = points[index + 1]
-		local dx = to.x - from.x
-		local dy = to.y - from.y
-		local length = math.sqrt(dx * dx + dy * dy)
-		table.insert(segments, { from = from, to = to, length = length, start = total })
-		total += length
-	end
-	return segments, total
-end
+local ENEMIES = {
+	shade = { displayName = "Courtyard Shade", hp = 12, speed = 2, leak = 4 },
+	bat = { displayName = "Choir Bat", hp = 9, speed = 3, leak = 3 },
+	hound = { displayName = "Gate Hound", hp = 28, speed = 2, leak = 6 },
+}
 
-local SEGMENTS, PATH_LENGTH = buildSegments(PATH)
+local CARDS = {
+	["packvania.warden"] = { damage = 4, range = 12, cooldown = 2, rankDamage = 2 },
+	["packvania.bolt"] = { damage = 3, range = 16, cooldown = 2, rankDamage = 2 },
+	["packvania.keeper"] = { damage = 2, range = 14, cooldown = 1, rankDamage = 1 },
+	["packvania.gargoyle"] = { damage = 6, range = 8, cooldown = 3, rankDamage = 2 },
+}
+
+local WAVES = {
+	["packvania.wave.courtyard"] = {
+		displayName = "Moon Courtyard",
+		mastery = 5,
+		coins = 10,
+		requires = nil :: string?,
+		groups = { { enemyId = "shade", count = 4, spacing = 5 } },
+	},
+	["packvania.wave.chapel"] = {
+		displayName = "Chapel Gate",
+		mastery = 8,
+		coins = 12,
+		requires = "packvania.wave.courtyard" :: string?,
+		groups = {
+			{ enemyId = "bat", count = 6, spacing = 3 },
+			{ enemyId = "hound", count = 2, spacing = 5 },
+		},
+	},
+}
+
+local RELICS = {
+	{ id = "packvania.cloak", displayName = "Night Cloak", damage = 1, range = 0, tower = 0 },
+	{ id = "packvania.bell", displayName = "Chapel Bell", damage = 0, range = 0, tower = 4 },
+	{ id = "packvania.lantern", displayName = "Pale Lantern", damage = 0, range = 4, tower = 0 },
+}
 
 function CombatTables.pathLength(): number
-	return PATH_LENGTH
+	return PATH
 end
 
-function CombatTables.pointAt(progress: number): Vec
-	local clamped = math.clamp(progress, 0, PATH_LENGTH)
-	for _, segment in SEGMENTS do
-		if clamped <= segment.start + segment.length then
-			local along = if segment.length == 0 then 0 else (clamped - segment.start) / segment.length
-			return {
-				x = segment.from.x + (segment.to.x - segment.from.x) * along,
-				y = segment.from.y + (segment.to.y - segment.from.y) * along,
-			}
-		end
+function CombatTables.tick(): number
+	return TICK
+end
+
+function CombatTables.towerMaxHp(): number
+	return TOWER
+end
+
+function CombatTables.maxTicks(): number
+	return MAX_TICKS
+end
+
+function CombatTables.upgradeCost(): number
+	return UPGRADE
+end
+
+function CombatTables.anchor(anchorId: string): number?
+	return ANCHORS[anchorId]
+end
+
+function CombatTables.anchors(): { string }
+	local names = {}
+	for name in ANCHORS do
+		table.insert(names, name)
 	end
-	local last = PATH[#PATH]
-	return { x = last.x, y = last.y }
+	table.sort(names)
+	return names
 end
 
-export type Anchor = { id: string, x: number, y: number }
-export type UnitStats = {
-	cardId: string,
-	damage: number,
-	cooldown: number,
-	range: number,
-	damagePerRank: number,
-}
-export type EnemyStats = { id: string, hp: number, speed: number, leakDamage: number }
-export type WaveGroup = { enemyId: string, count: number, spacing: number }
-export type WaveDef = {
-	id: string,
-	displayName: string,
-	groups: { WaveGroup },
-	mastery: number,
-	coins: number,
-	requires: string?,
-}
-
-local ANCHORS: { Anchor } = {
-	{ id = "lane.mid", x = 30, y = 10 },
-}
-
-local UNITS: { [string]: UnitStats } = {
-	["placeholder.frontline"] = {
-		cardId = "placeholder.frontline",
-		damage = 6,
-		cooldown = 0.4,
-		range = 16,
-		damagePerRank = 8,
-	},
-	["placeholder.bolt"] = {
-		cardId = "placeholder.bolt",
-		damage = 3,
-		cooldown = 1.2,
-		range = 16,
-		damagePerRank = 8,
-	},
-}
-
-local ENEMIES: { [string]: EnemyStats } = {
-	["placeholder.grunt"] = { id = "placeholder.grunt", hp = 18, speed = 10, leakDamage = 15 },
-	["placeholder.brute"] = { id = "placeholder.brute", hp = 70, speed = 10, leakDamage = 15 },
-}
-
-local WAVES: { WaveDef } = {
-	{
-		id = "placeholder.wave.1",
-		displayName = "Placeholder wave 1",
-		groups = { { enemyId = "placeholder.grunt", count = 3, spacing = 1.2 } },
-		mastery = 5,
-		coins = 10,
-		requires = nil,
-	},
-	{
-		id = "placeholder.wave.2",
-		displayName = "Placeholder wave 2",
-		groups = { { enemyId = "placeholder.brute", count = 1, spacing = 1 } },
-		mastery = 5,
-		coins = 10,
-		requires = "placeholder.wave.1",
-	},
-}
-
-function CombatTables.anchors(): { Anchor }
-	return ANCHORS
-end
-
-function CombatTables.anchor(anchorId: string): Anchor?
-	for _, anchor in ANCHORS do
-		if anchor.id == anchorId then
-			return anchor
-		end
-	end
-	return nil
-end
-
-function CombatTables.unit(cardId: string): UnitStats?
-	return UNITS[cardId]
-end
-
-function CombatTables.enemy(enemyId: string): EnemyStats?
+function CombatTables.enemy(enemyId: string)
 	return ENEMIES[enemyId]
 end
 
-function CombatTables.waves(): { WaveDef }
-	return WAVES
+function CombatTables.enemies()
+	local rows = {}
+	for id, stats in ENEMIES do
+		table.insert(rows, { id = id, displayName = stats.displayName })
+	end
+	table.sort(rows, function(a, b)
+		return a.displayName < b.displayName
+	end)
+	return rows
 end
 
-function CombatTables.wave(waveId: string): WaveDef?
-	for _, wave in WAVES do
-		if wave.id == waveId then
-			return wave
+function CombatTables.card(cardId: string)
+	return CARDS[cardId]
+end
+
+function CombatTables.wave(waveId: string)
+	return WAVES[waveId]
+end
+
+function CombatTables.relics()
+	return RELICS
+end
+
+function CombatTables.relicBonus(equipped: { string }): { damage: number, range: number, tower: number }
+	local bonus = { damage = 0, range = 0, tower = 0 }
+	for _, relicId in equipped do
+		for _, relic in RELICS do
+			if relic.id == relicId then
+				bonus.damage += relic.damage
+				bonus.range += relic.range
+				bonus.tower += relic.tower
+			end
 		end
 	end
-	return nil
-end
-
-function CombatTables.damage(cardId: string, rank: number): number
-	local unit = UNITS[cardId]
-	if unit == nil then
-		return 0
-	end
-	return unit.damage + rank * unit.damagePerRank
-end
-
-function CombatTables.startingRealm(): string
-	return "placeholder.tower"
+	return bonus
 end
 
 function CombatTables.clearedRealm(): string
-	return "placeholder.gate"
+	return "packvania.chapel"
+end
+
+function CombatTables.startRealm(): string
+	return "packvania.courtyard"
 end
 
 function CombatTables.realmName(realmId: string): string
-	if realmId == "placeholder.gate" then
-		return "Placeholder Gate"
+	if realmId == "packvania.chapel" then
+		return "Chapel Gate"
 	end
-	return "Placeholder Tower"
+	return "Moon Courtyard"
 end
 
 return CombatTables

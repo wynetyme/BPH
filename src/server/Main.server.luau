@@ -1,53 +1,92 @@
 --!strict
--- Studio-only host. ProcessReceipt is installed. Live Robux charges stay off.
--- No production DataStore name and no grant from PromptProductPurchaseFinished.
+-- Packvania server. ProcessReceipt is installed. Live Robux charges stay off.
+-- Outside Studio the slice stays off so a publish cannot grant or save yet.
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local PolicyService = game:GetService("PolicyService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 if not RunService:IsStudio() then
-	warn("BPH pack slice stays off outside Studio. No live save and no purchases.")
+	warn("Packvania stays off outside Studio. No live save and no purchases.")
 	return
 end
 
-local sharedFolder = ReplicatedStorage:WaitForChild("Shared", 10)
-assert(sharedFolder, "ReplicatedStorage.Shared missing")
-local dataFolder = sharedFolder:WaitForChild("data", 10)
-local serverFolder = sharedFolder:WaitForChild("server", 10)
-local uiFolder = sharedFolder:WaitForChild("ui", 10)
-local netFolder = sharedFolder:WaitForChild("net", 10)
-assert(dataFolder and serverFolder and uiFolder and netFolder, "Shared folders missing")
+local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
+local dataFolder = sharedFolder:WaitForChild("data")
+local serverFolder = sharedFolder:WaitForChild("server")
+local uiFolder = sharedFolder:WaitForChild("ui")
+local netFolder = sharedFolder:WaitForChild("net")
 
 local PackDefinitions = require(dataFolder:WaitForChild("PackDefinitions"))
-local CardDefinitions = require(dataFolder:WaitForChild("CardDefinitions"))
-local PackUI = require(uiFolder:WaitForChild("PackUI"))
+local ProductCatalog = require(dataFolder:WaitForChild("ProductCatalog"))
 local RemoteContract = require(netFolder:WaitForChild("RemoteContract"))
+local Board = require(uiFolder:WaitForChild("Board"))
 local PackOpen = require(serverFolder:WaitForChild("PackOpen"))
 local PlayerData = require(serverFolder:WaitForChild("PlayerData"))
 local ProfileSession = require(serverFolder:WaitForChild("ProfileSession"))
 local SeededRoll = require(serverFolder:WaitForChild("SeededRoll"))
-local ProductCatalog = require(dataFolder:WaitForChild("ProductCatalog"))
 local PaidPurchase = require(serverFolder:WaitForChild("PaidPurchase"))
 local ReceiptCommit = require(serverFolder:WaitForChild("ReceiptCommit"))
 local PurchaseEntitlements = require(serverFolder:WaitForChild("PurchaseEntitlements"))
 local RunCombat = require(serverFolder:WaitForChild("RunCombat"))
 local Progression = require(serverFolder:WaitForChild("Progression"))
-local CombatUI = require(uiFolder:WaitForChild("CombatUI"))
 
 local validated = PackDefinitions.validateShipping()
 if not validated.ok then
 	error("Shipping pack catalog is invalid: " .. validated.code)
 end
 
-local remotes = ReplicatedStorage:FindFirstChild("BPHRemotes")
+local function part(parent: Instance, name: string, size: Vector3, position: Vector3, color: Color3, material: Enum.Material): Part
+	local block = Instance.new("Part")
+	block.Name = name
+	block.Anchored = true
+	block.Size = size
+	block.Position = position
+	block.Color = color
+	block.Material = material
+	block.TopSurface = Enum.SurfaceType.Smooth
+	block.BottomSurface = Enum.SurfaceType.Smooth
+	block.Parent = parent
+	return block
+end
+
+local map = Instance.new("Folder")
+map.Name = "Packvania"
+map.Parent = Workspace
+local ground = part(map, "Courtyard", Vector3.new(140, 2, 140), Vector3.new(0, 0, 0), Color3.fromRGB(28, 24, 48), Enum.Material.Slate)
+part(map, "Path", Vector3.new(10, 0.4, 70), Vector3.new(0, 1.2, 8), Color3.fromRGB(72, 64, 102), Enum.Material.Cobblestone)
+local tower = part(map, "Tower", Vector3.new(10, 18, 10), Vector3.new(0, 10, -8), Color3.fromRGB(96, 92, 118), Enum.Material.Brick)
+part(map, "Roof", Vector3.new(12, 4, 12), Vector3.new(0, 21, -8), Color3.fromRGB(128, 48, 72), Enum.Material.Slate)
+part(map, "Door", Vector3.new(3, 5, 0.4), Vector3.new(0, 3.5, -2.8), Color3.fromRGB(214, 176, 92), Enum.Material.Neon)
+part(map, "Moon", Vector3.new(8, 8, 8), Vector3.new(-28, 36, -20), Color3.fromRGB(230, 220, 190), Enum.Material.Neon)
+for index, spot in { Vector3.new(-24, 6, 16), Vector3.new(22, 6, 18), Vector3.new(-18, 5, -24), Vector3.new(26, 7, -16) } do
+	part(map, "Cypress" .. index, Vector3.new(3, 12, 3), spot, Color3.fromRGB(36, 32, 58), Enum.Material.Slate)
+end
+local pads = { ["lane.back"] = Vector3.new(-8, 1.4, 10), ["lane.mid"] = Vector3.new(0, 1.4, 4), ["lane.front"] = Vector3.new(8, 1.4, -2) }
+for name, position in pads do
+	part(map, name, Vector3.new(4, 0.4, 4), position, Color3.fromRGB(90, 78, 130), Enum.Material.Neon)
+end
+part(map, "PackPedestal", Vector3.new(4, 2, 4), Vector3.new(16, 2, 14), Color3.fromRGB(92, 64, 48), Enum.Material.Wood)
+Lighting.ClockTime = 20.5
+Lighting.Ambient = Color3.fromRGB(48, 42, 78)
+Lighting.OutdoorAmbient = Color3.fromRGB(36, 32, 64)
+Lighting.Brightness = 1.4
+ground.Name = "Courtyard"
+tower.Name = "Tower"
+
+local starter = game:GetService("StarterPlayer")
+starter.CharacterAutoLoads = false
+
+local remotes = ReplicatedStorage:FindFirstChild("PackvaniaRemotes")
 if remotes == nil then
 	remotes = Instance.new("Folder")
-	remotes.Name = "BPHRemotes"
+	remotes.Name = "PackvaniaRemotes"
 	remotes.Parent = ReplicatedStorage
 end
 
@@ -71,24 +110,23 @@ local paidRemote = remote(RemoteContract.names.RequestPaidPack)
 local placeRemote = remote(RemoteContract.names.PlaceHero)
 local waveRemote = remote(RemoteContract.names.StartWave)
 local upgradeRemote = remote(RemoteContract.names.BuyUpgrade)
+local relicRemote = remote(RemoteContract.names.ToggleRelic)
 local resultRemote = remote("PackOpenResult")
 local gate = RemoteContract.createRateGate(PackOpen.interval())
 local nextInteger = SeededRoll.integer((DateTime.now().UnixTimestampMillis % 2147483646) + 1)
 
-local storeName = ProfileSession.studioStoreName()
 local dataStore = nil
 local storeOk, storeOrErr = pcall(function()
-	return DataStoreService:GetDataStore(storeName)
+	return DataStoreService:GetDataStore(ProfileSession.studioStoreName())
 end)
 if storeOk then
 	dataStore = storeOrErr
-	print("BPH persistence: Studio DataStore", storeName)
+	print("Packvania persistence: Studio DataStore", ProfileSession.studioStoreName())
 else
-	warn("BPH persistence: DataStore unavailable, memory only. Rejoin will not keep cards. " .. tostring(storeOrErr))
+	warn("Packvania persistence: DataStore unavailable, memory only. " .. tostring(storeOrErr))
 end
 
 local memory = ProfileSession.createMemoryStore()
-
 local durable: ProfileSession.Store? = nil
 if dataStore ~= nil then
 	local live = dataStore
@@ -118,15 +156,8 @@ local adapter = {
 	end,
 }
 
-type Session = {
-	token: string,
-	key: string,
-	profile: any,
-}
-type PaidPolicy = {
-	known: boolean,
-	arePaidRandomItemsRestricted: boolean,
-}
+type Session = { token: string, key: string, profile: any }
+type PaidPolicy = { known: boolean, arePaidRandomItemsRestricted: boolean }
 local sessions: { [Player]: Session } = {}
 local policies: { [Player]: PaidPolicy } = {}
 
@@ -134,59 +165,10 @@ local function readPolicy(player: Player): PaidPolicy
 	local ok, info = pcall(function()
 		return PolicyService:GetPolicyInfoForPlayerAsync(player)
 	end)
-	if not ok or type(info) ~= "table" then
+	if not ok or type(info) ~= "table" or type((info :: any).ArePaidRandomItemsRestricted) ~= "boolean" then
 		return { known = false, arePaidRandomItemsRestricted = true }
 	end
-	local restricted = (info :: { [string]: any }).ArePaidRandomItemsRestricted
-	if type(restricted) ~= "boolean" then
-		return { known = false, arePaidRandomItemsRestricted = true }
-	end
-	return { known = true, arePaidRandomItemsRestricted = restricted }
-end
-
-local function snapshot(profile, policy: PaidPolicy): { [string]: any }
-	local pack = PackDefinitions.get("placeholder.starter")
-	local cards = {}
-	for cardId, count in profile.collection do
-		local card = CardDefinitions.get(cardId)
-		table.insert(cards, {
-			cardId = cardId,
-			displayName = if card ~= nil then card.displayName else cardId,
-			kind = if card ~= nil then card.kind else "Hero",
-			count = count,
-			rank = profile.ranks[cardId] or 0,
-		})
-	end
-	table.sort(cards, function(a, b)
-		return a.displayName < b.displayName
-	end)
-	local unopened = {}
-	for _, entitlement in profile.unopenedPacks do
-		local named = PackDefinitions.get(entitlement.packId)
-		table.insert(unopened, {
-			id = entitlement.id,
-			packId = entitlement.packId,
-			displayName = if named ~= nil then named.displayName else entitlement.packId,
-		})
-	end
-	return {
-		coins = profile.currencies.coins,
-		cards = cards,
-		unopened = unopened,
-		oddsLines = if pack ~= nil then PackUI.oddsLines(pack) else {},
-		paidOddsLines = PackUI.paidOddsLines(),
-		shopText = PackUI.shopText(policy),
-		paidPackId = ProductCatalog.list()[1].packId,
-		developerProductId = ProductCatalog.list()[1].developerProductId,
-		notice = PackUI.PROVISIONAL_NOTICE,
-		paidEnabled = false,
-		allowPrompt = false,
-		mastery = profile.currencies.mastery,
-		combatText = CombatUI.describe(profile, nil),
-		nextWaveId = Progression.nextWaveId(profile),
-		gatePackId = PackDefinitions.gatePack().id,
-		gateUnlocked = profile.unlockedPacks[PackDefinitions.gatePack().id] == true,
-	}
+	return { known = true, arePaidRandomItemsRestricted = (info :: any).ArePaidRandomItemsRestricted }
 end
 
 local function send(player: Player, body: { [string]: any })
@@ -198,73 +180,43 @@ local function loadPlayer(player: Player)
 	local key = ProfileSession.playerKey(player.UserId)
 	local loaded = ProfileSession.load(adapter, key, token, os.time())
 	if not loaded.ok then
-		warn("BPH load failed", player.UserId, loaded.code)
+		warn("Packvania load failed", player.UserId, loaded.code)
 		send(player, { ok = false, code = loaded.code })
 		return
 	end
 	local policy = readPolicy(player)
 	policies[player] = policy
 	sessions[player] = { token = token, key = key, profile = loaded.value }
-	send(player, { ok = true, snapshot = snapshot(loaded.value, policy) })
-	print("BPH loaded", player.UserId, "coins", loaded.value.currencies.coins, "policyKnown", policy.known)
-end
-
-local function stamp(profile): string
-	local cards = 0
-	for _, count in profile.collection do
-		cards += count
-	end
-	local ranks = 0
-	for _, rank in profile.ranks do
-		ranks += rank
-	end
-	local unlocks = 0
-	for _, open in profile.unlockedPacks do
-		if open then
-			unlocks += 1
-		end
-	end
-	return table.concat({
-		tostring(profile.currencies.coins),
-		tostring(profile.currencies.mastery),
-		tostring(profile.nextEntitlementNonce),
-		tostring(#profile.unopenedPacks),
-		tostring(#profile.placement),
-		tostring(#profile.clearedWaves),
-		tostring(cards),
-		tostring(ranks),
-		tostring(unlocks),
-		profile.realmId,
-	}, ":")
-end
-
-local function commitMutation(session: Session, before): boolean
-	if stamp(before) == stamp(session.profile) then
-		return true
-	end
-	local saved = ProfileSession.save(adapter, session.key, session.token, session.profile, os.time(), false)
-	if not saved.ok then
-		session.profile = before
-		warn("BPH save failed", session.key, saved.code)
-		return false
-	end
-	session.profile = saved.value
-	return true
+	send(player, { ok = true, snapshot = Board.snapshot(loaded.value, policy) })
+	print("Packvania loaded", player.UserId, "coins", loaded.value.currencies.coins, "policyKnown", policy.known)
 end
 
 local function releasePlayer(player: Player)
 	local session = sessions[player]
 	policies[player] = nil
+	sessions[player] = nil
 	if session == nil then
 		return
 	end
-	sessions[player] = nil
 	local saved = ProfileSession.save(adapter, session.key, session.token, session.profile, os.time(), true)
-	if not saved.ok then
-		warn("BPH save failed", player.UserId, saved.code)
+	if saved.ok then
+		print("Packvania saved", player.UserId)
 	else
-		print("BPH saved", player.UserId)
+		warn("Packvania save failed", player.UserId, saved.code)
 	end
+end
+
+local function policyOf(player: Player): PaidPolicy
+	return policies[player] or { known = false, arePaidRandomItemsRestricted = true }
+end
+
+local function commit(session: Session): boolean
+	local saved = ProfileSession.save(adapter, session.key, session.token, session.profile, os.time(), false)
+	if not saved.ok then
+		return false
+	end
+	session.profile = saved.value
+	return true
 end
 
 openRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
@@ -275,20 +227,18 @@ openRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	end
 	local before = PlayerData.clone(session.profile)
 	local opened = PackOpen.request(session.profile, payload, tostring(player.UserId), os.clock(), gate, nextInteger)
-	if not commitMutation(session, before) then
-		send(player, { ok = false, code = "StoreFailed", snapshot = snapshot(session.profile, policies[player] or readPolicy(player)) })
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
+	local policy = policyOf(player)
 	if opened.ok then
-		send(player, { ok = true, reveal = opened.value, snapshot = snapshot(session.profile, policies[player] or readPolicy(player)) })
-		return
+		send(player, { ok = true, reveal = opened.value, snapshot = Board.snapshot(session.profile, policy) })
+	else
+		send(player, { ok = false, code = opened.code, snapshot = Board.snapshot(session.profile, policy) })
 	end
-	send(player, { ok = false, code = opened.code, snapshot = snapshot(session.profile, policies[player] or readPolicy(player)) })
 end)
-
-local function playerPolicy(player: Player): PaidPolicy
-	return policies[player] or { known = false, arePaidRandomItemsRestricted = true }
-end
 
 entitlementRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	local session = sessions[player]
@@ -300,15 +250,16 @@ entitlementRemote.OnServerEvent:Connect(function(player: Player, payload: unknow
 	policies[player] = policy
 	local before = PlayerData.clone(session.profile)
 	local opened = PackOpen.openOwned(session.profile, payload, tostring(player.UserId), os.clock(), gate, nextInteger, policy)
-	if not commitMutation(session, before) then
-		send(player, { ok = false, code = "StoreFailed", snapshot = snapshot(session.profile, policy) })
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policy) })
 		return
 	end
 	if opened.ok then
-		send(player, { ok = true, reveal = opened.value, snapshot = snapshot(session.profile, policy) })
-		return
+		send(player, { ok = true, reveal = opened.value, snapshot = Board.snapshot(session.profile, policy) })
+	else
+		send(player, { ok = false, code = opened.code, snapshot = Board.snapshot(session.profile, policy) })
 	end
-	send(player, { ok = false, code = opened.code, snapshot = snapshot(session.profile, policy) })
 end)
 
 paidRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
@@ -320,124 +271,125 @@ paidRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	local policy = readPolicy(player)
 	policies[player] = policy
 	local decision = PaidPurchase.request(payload, policy, ProductCatalog.liveChargesEnabled())
-	local promptedId = 0
-	if decision.ok and ProductCatalog.liveChargesEnabled() and decision.value.developerProductId >= 1 then
-		promptedId = decision.value.developerProductId
-	end
 	send(player, {
 		ok = false,
 		kind = "paid",
 		code = if decision.ok then "LiveChargesDisabled" else decision.code,
-		allowPrompt = promptedId >= 1,
-		productId = promptedId,
-		snapshot = snapshot(session.profile, policy),
+		allowPrompt = false,
+		snapshot = Board.snapshot(session.profile, policy),
 	})
 end)
-
-local function combatReply(player: Player, session: Session, ok: boolean, code: string, summary: string?, combat: CombatUI.CombatSummary?)
-	local policy = policies[player] or readPolicy(player)
-	send(player, {
-		ok = ok,
-		kind = "combat",
-		code = code,
-		summary = summary,
-		combat = combat,
-		snapshot = snapshot(session.profile, policy),
-	})
-end
 
 placeRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	local session = sessions[player]
 	if session == nil then
-		send(player, { ok = false, kind = "combat", code = "ProfileNotLoaded" })
+		send(player, { ok = false, code = "ProfileNotLoaded" })
 		return
 	end
 	local parsed = RemoteContract.validatePlaceHero(payload)
 	if not parsed.ok then
-		combatReply(player, session, false, parsed.code, nil)
-		return
-	end
-	if not gate:allow(tostring(player.UserId), RemoteContract.names.PlaceHero, os.clock()) then
-		combatReply(player, session, false, "RateLimited", nil)
+		send(player, { ok = false, code = parsed.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
 	local before = PlayerData.clone(session.profile)
 	local placed = Progression.place(session.profile, parsed.value.cardId, parsed.value.anchorId)
 	if not placed.ok then
 		session.profile = before
-		combatReply(player, session, false, placed.code, nil)
+		send(player, { ok = false, code = placed.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	if not commitMutation(session, before) then
-		combatReply(player, session, false, "StoreFailed", nil)
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	combatReply(player, session, true, "Placed", CombatUI.describe(session.profile, nil))
+	send(player, { ok = true, code = "Placed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 end)
 
 waveRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	local session = sessions[player]
 	if session == nil then
-		send(player, { ok = false, kind = "combat", code = "ProfileNotLoaded" })
+		send(player, { ok = false, code = "ProfileNotLoaded" })
 		return
 	end
 	local parsed = RemoteContract.validateStartWave(payload)
 	if not parsed.ok then
-		combatReply(player, session, false, parsed.code, nil)
-		return
-	end
-	if not gate:allow(tostring(player.UserId), RemoteContract.names.StartWave, os.clock()) then
-		combatReply(player, session, false, "RateLimited", nil)
+		send(player, { ok = false, code = parsed.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
 	local before = PlayerData.clone(session.profile)
 	local fought = RunCombat.fight(session.profile, parsed.value.waveId, 20261117)
 	if not fought.ok then
 		session.profile = before
-		combatReply(player, session, false, fought.code, nil)
+		send(player, { ok = false, code = fought.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	print("BPH combat", fought.value.waveId, "ticks", fought.value.ticks, "survived", fought.value.survived, "damage", fought.value.damageDealt)
-	if not commitMutation(session, before) then
-		combatReply(player, session, false, "StoreFailed", nil)
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	combatReply(player, session, fought.value.survived, if fought.value.survived then "TowerSurvived" else "TowerFell", CombatUI.describe(session.profile, fought.value), {
-		seed = fought.value.seed,
-		ticks = fought.value.ticks,
-		damageDealt = fought.value.damageDealt,
-		survived = fought.value.survived,
-		towerHp = fought.value.towerHp,
+	local report = fought.value
+	print("Packvania combat", report.waveId, "ticks", report.ticks, "survived", report.survived)
+	send(player, {
+		ok = report.survived,
+		kind = "combat",
+		code = if report.survived then "TowerSurvived" else "TowerFell",
+		resultLines = Board.resultLines(session.profile, report),
+		snapshot = Board.snapshot(session.profile, policyOf(player)),
 	})
 end)
 
 upgradeRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 	local session = sessions[player]
 	if session == nil then
-		send(player, { ok = false, kind = "combat", code = "ProfileNotLoaded" })
+		send(player, { ok = false, code = "ProfileNotLoaded" })
 		return
 	end
 	local parsed = RemoteContract.validateBuyUpgrade(payload)
 	if not parsed.ok then
-		combatReply(player, session, false, parsed.code, nil)
-		return
-	end
-	if not gate:allow(tostring(player.UserId), RemoteContract.names.BuyUpgrade, os.clock()) then
-		combatReply(player, session, false, "RateLimited", nil)
+		send(player, { ok = false, code = parsed.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
 	local before = PlayerData.clone(session.profile)
 	local ranked = Progression.upgrade(session.profile, parsed.value.cardId)
 	if not ranked.ok then
 		session.profile = before
-		combatReply(player, session, false, ranked.code, nil)
+		send(player, { ok = false, code = ranked.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	if not commitMutation(session, before) then
-		combatReply(player, session, false, "StoreFailed", nil)
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
-	combatReply(player, session, true, "Upgraded", CombatUI.describe(session.profile, nil))
+	send(player, { ok = true, code = "Upgraded", snapshot = Board.snapshot(session.profile, policyOf(player)) })
+end)
+
+relicRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
+	local session = sessions[player]
+	if session == nil then
+		send(player, { ok = false, code = "ProfileNotLoaded" })
+		return
+	end
+	local parsed = RemoteContract.validateToggleRelic(payload)
+	if not parsed.ok then
+		send(player, { ok = false, code = parsed.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
+		return
+	end
+	local before = PlayerData.clone(session.profile)
+	local toggled = Progression.toggleRelic(session.profile, parsed.value.relicId)
+	if not toggled.ok then
+		session.profile = before
+		send(player, { ok = false, code = toggled.code, snapshot = Board.snapshot(session.profile, policyOf(player)) })
+		return
+	end
+	if not commit(session) then
+		session.profile = before
+		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
+		return
+	end
+	send(player, { ok = true, code = "Relic", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 end)
 
 MarketplaceService.ProcessReceipt = function(receiptInfo)
@@ -445,13 +397,10 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
-	if player == nil then
+	if player == nil or sessions[player] == nil then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local session = sessions[player]
-	if session == nil then
-		return Enum.ProductPurchaseDecision.NotProcessedYet
-	end
 	local before = PlayerData.clone(session.profile)
 	local flushed = ProfileSession.save(adapter, session.key, session.token, session.profile, os.time(), false)
 	if not flushed.ok then
@@ -468,7 +417,7 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 	local committed = ReceiptCommit.process(adapter, session.key, session.token, receipt, products, nil, os.time(), true)
 	if committed.ok and committed.value.decision == "PurchaseGranted" then
 		PurchaseEntitlements.applyReceipt(session.profile, receipt, products, nil)
-		send(player, { ok = true, kind = "receipt", snapshot = snapshot(session.profile, playerPolicy(player)) })
+		send(player, { ok = true, kind = "receipt", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -478,8 +427,7 @@ MarketplaceService.PromptProductPurchaseFinished:Connect(function()
 	PurchaseEntitlements.onPromptFinished()
 end)
 
-print("BPH ProcessReceipt installed. Live charges", ProductCatalog.liveChargesEnabled())
-
+print("Packvania ProcessReceipt installed. Live charges", ProductCatalog.liveChargesEnabled())
 Players.PlayerAdded:Connect(loadPlayer)
 for _, player in Players:GetPlayers() do
 	task.spawn(loadPlayer, player)

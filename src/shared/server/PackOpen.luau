@@ -1,5 +1,4 @@
 --!strict
--- Server-only open. Rejects extra payload fields before spending coins.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
@@ -19,20 +18,27 @@ export type OpenGrant = {
 
 local PackOpen = {}
 
-local OPEN_INTERVAL = 1.5
-
 function PackOpen.interval(): number
-	return OPEN_INTERVAL
+	return 1.5
 end
 
-function PackOpen.request(
-	profile: Types.PlayerProfile,
-	payload: unknown,
-	playerKey: string,
-	now: number,
-	gate: RemoteContract.RateGate,
-	nextInteger: (number) -> number
-): Result.Result<OpenGrant>
+local function present(profile: Types.PlayerProfile, rolls: { any }): Result.Result<OpenGrant>
+	local cardId = rolls[1].cardId
+	local card = CardDefinitions.get(cardId)
+	if card == nil then
+		return Result.err("UnknownCard")
+	end
+	return Result.ok({
+		cardId = cardId,
+		displayName = card.displayName,
+		kind = card.kind,
+		foil = false,
+		provisional = true,
+		coins = profile.currencies.coins,
+	})
+end
+
+function PackOpen.request(profile: Types.PlayerProfile, payload: unknown, playerKey: string, now: number, gate: RemoteContract.RateGate, nextInteger: (number) -> number): Result.Result<OpenGrant>
 	local parsed = RemoteContract.validateOpenEarnedPack(payload)
 	if not parsed.ok then
 		return parsed
@@ -48,19 +54,7 @@ function PackOpen.request(
 	if not opened.ok then
 		return opened
 	end
-	local cardId = opened.value[1].cardId
-	local card = CardDefinitions.get(cardId)
-	if card == nil then
-		return Result.err("UnknownCard")
-	end
-	return Result.ok({
-		cardId = cardId,
-		displayName = card.displayName,
-		kind = card.kind,
-		foil = false,
-		provisional = true,
-		coins = profile.currencies.coins,
-	})
+	return present(profile, opened.value)
 end
 
 function PackOpen.openOwned(
@@ -98,19 +92,7 @@ function PackOpen.openOwned(
 	if not opened.ok then
 		return opened
 	end
-	local cardId = opened.value[1].cardId
-	local card = CardDefinitions.get(cardId)
-	if card == nil then
-		return Result.err("UnknownCard")
-	end
-	return Result.ok({
-		cardId = cardId,
-		displayName = card.displayName,
-		kind = card.kind,
-		foil = false,
-		provisional = true,
-		coins = profile.currencies.coins,
-	})
+	return present(profile, opened.value)
 end
 
 return PackOpen

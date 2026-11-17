@@ -1,37 +1,20 @@
 --!strict
--- Survival grants Mastery only. Wave tables are not invented here.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
-local Economy = require("./Economy")
 local CombatSim = require("./CombatSim")
+local Economy = require("./Economy")
 local Progression = require("./Progression")
-
-export type RunState = {
-	active: boolean,
-	masteryEarned: number,
-}
 
 local RunCombat = {}
 
-function RunCombat.begin(): RunState
-	return { active = true, masteryEarned = 0 }
-end
-
-function RunCombat.grantSurvivalMastery(profile: Types.PlayerProfile, run: RunState, amount: number): Result.Result<number>
-	if not run.active then
-		return Result.err("RunInactive")
+local function alreadyCleared(profile: Types.PlayerProfile, waveId: string): boolean
+	for _, cleared in profile.clearedWaves do
+		if cleared == waveId then
+			return true
+		end
 	end
-	if amount ~= amount or math.abs(amount) == math.huge or amount < 0 or amount % 1 ~= 0 then
-		return Result.err("InvalidAmount")
-	end
-	run.masteryEarned += amount
-	profile.currencies.mastery += amount
-	return Result.ok(profile.currencies.mastery)
-end
-
-function RunCombat.finish(run: RunState)
-	run.active = false
+	return false
 end
 
 function RunCombat.fight(profile: Types.PlayerProfile, waveId: string, seed: number): Result.Result<CombatSim.Report>
@@ -40,22 +23,15 @@ function RunCombat.fight(profile: Types.PlayerProfile, waveId: string, seed: num
 		return simulated
 	end
 	local report = simulated.value
-	local cleared = false
-	for _, wave in profile.clearedWaves do
-		if wave == report.waveId then
-			cleared = true
-			break
-		end
-	end
+	Progression.noteBestiary(profile, waveId)
+	profile.damageDealt += report.damageDealt
+	local cleared = alreadyCleared(profile, report.waveId)
 	if report.survived and cleared then
 		report.mastery = 0
 		report.coins = 0
 	elseif report.survived then
-		local run = RunCombat.begin()
-		local granted = RunCombat.grantSurvivalMastery(profile, run, report.mastery)
-		RunCombat.finish(run)
-		if not granted.ok then
-			return granted
+		if report.mastery > 0 then
+			profile.currencies.mastery += report.mastery
 		end
 		if report.coins > 0 then
 			local paid = Economy.grantCoins(profile, report.coins)

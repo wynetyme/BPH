@@ -1,5 +1,4 @@
 --!strict
--- Session lock around a serialized profile. No DataStore calls.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
@@ -18,7 +17,6 @@ export type Store = {
 }
 
 local ProfileSession = {}
-
 local STALE_SECONDS = 30
 
 function ProfileSession.staleSeconds(): number
@@ -26,7 +24,7 @@ function ProfileSession.staleSeconds(): number
 end
 
 function ProfileSession.studioStoreName(): string
-	return "BPH_PlayerData_Studio_v1"
+	return "Packvania_PlayerData_Studio_v1"
 end
 
 function ProfileSession.playerKey(userId: number): string
@@ -41,24 +39,19 @@ function ProfileSession.claim(previous: Blob?, token: string, now: number): Resu
 	end
 	local profile = PlayerData.createDefault()
 	if previous ~= nil then
-		local reconciled = PlayerData.reconcile(previous.profile :: { [string]: unknown })
+		local reconciled = PlayerData.reconcile(previous.profile :: any)
 		if reconciled.ok then
 			profile = reconciled.value
 		end
 	end
 	Economy.applyStarterGrant(profile)
-	return Result.ok({
-		sessionToken = token,
-		sessionAt = now,
-		profile = profile,
-	})
+	return Result.ok({ sessionToken = token, sessionAt = now, profile = profile })
 end
 
 function ProfileSession.write(blob: Blob, token: string, profile: Types.PlayerProfile, now: number): Result.Result<Blob>
 	if blob.sessionToken ~= token then
 		return Result.err("SessionMismatch")
 	end
-	-- A stale session must not delete a receipt the store already committed.
 	local merged = PlayerData.clone(profile)
 	for purchaseId, record in blob.profile.receipts do
 		if merged.receipts[purchaseId] == nil then
@@ -78,12 +71,7 @@ function ProfileSession.write(blob: Blob, token: string, profile: Types.PlayerPr
 						end
 					end
 					if not present then
-						table.insert(merged.unopenedPacks, {
-							id = pack.id,
-							packId = pack.packId,
-							source = pack.source,
-							state = pack.state,
-						})
+						table.insert(merged.unopenedPacks, { id = pack.id, packId = pack.packId, source = pack.source, state = pack.state })
 					end
 				end
 			end
@@ -93,11 +81,7 @@ function ProfileSession.write(blob: Blob, token: string, profile: Types.PlayerPr
 	if not validated.ok then
 		return validated
 	end
-	return Result.ok({
-		sessionToken = token,
-		sessionAt = now,
-		profile = PlayerData.clone(validated.value),
-	})
+	return Result.ok({ sessionToken = token, sessionAt = now, profile = PlayerData.clone(validated.value) })
 end
 
 function ProfileSession.release(blob: Blob, token: string, profile: Types.PlayerProfile, now: number): Result.Result<Blob>
@@ -150,9 +134,7 @@ function ProfileSession.save(store: Store, key: string, token: string, profile: 
 		if base == nil then
 			base = { sessionToken = token, sessionAt = now, profile = profile }
 		end
-		local written = if releaseLock
-			then ProfileSession.release(base, token, profile, now)
-			else ProfileSession.write(base, token, profile, now)
+		local written = if releaseLock then ProfileSession.release(base, token, profile, now) else ProfileSession.write(base, token, profile, now)
 		if not written.ok then
 			return nil
 		end

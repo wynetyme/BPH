@@ -1,5 +1,4 @@
 --!strict
--- Same outcome rows as CardOdds. Caller supplies integers in 1..totalWeight.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
@@ -15,7 +14,7 @@ export type Roll = {
 
 local PackRoller = {}
 
-function PackRoller.rollPack(pack: Types.PackDefinition, nextInteger: (totalWeight: number) -> number): Result.Result<{ Roll }>
+function PackRoller.rollPack(pack: Types.PackDefinition, nextInteger: (number) -> number): Result.Result<{ Roll }>
 	local validated = PackDefinitions.validate(pack)
 	if not validated.ok then
 		return validated

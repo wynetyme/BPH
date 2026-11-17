@@ -1,5 +1,5 @@
 --!strict
--- Display rows and PackRoller.pickIndex both read pack.outcomes. There is no second weight table.
+-- Display rows and PackRoller both read pack.outcomes. There is no second weight table.
 
 local Types = require("../contracts/Types")
 local PackDefinitions = require("./PackDefinitions")
@@ -77,11 +77,7 @@ function CardOdds.basisPoints(pack: Types.PackDefinition): { number }
 end
 
 function CardOdds.identityModifiers(): OddsModifiers
-	return {
-		pityCharges = 0,
-		luckMultiplier = 1,
-		excludeOwned = false,
-	}
+	return { pityCharges = 0, luckMultiplier = 1, excludeOwned = false }
 end
 
 function CardOdds.playerFinalOutcomes(pack: Types.PackDefinition, modifiers: OddsModifiers): Result.Result<{ OddsRow }>
@@ -126,12 +122,7 @@ function CardOdds.listPaidEligibleOutcomes(pack: Types.PackDefinition, paidPurch
 	if not listed.ok then
 		return { status = "Blocked", reason = listed.code }
 	end
-	return {
-		status = "Ready",
-		rows = listed.value,
-		slots = pack.slots,
-		note = "PerSlotIndependent",
-	}
+	return { status = "Ready", rows = listed.value, slots = pack.slots, note = "PerSlotIndependent" }
 end
 
 return CardOdds

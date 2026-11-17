@@ -1,11 +1,9 @@
 --!strict
--- Receipts grant an unopened pack entitlement only. Opening is a later server step.
--- PurchaseGranted is the decision ReceiptCommit may return after UpdateAsync commits.
+-- Receipts grant an unopened pack. Opening is a later server step.
 -- PromptProductPurchaseFinished is not a receipt.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
-local CardOdds = require("../data/CardOdds")
 local PaidGate = require("../data/PaidGate")
 local PackDefinitions = require("../data/PackDefinitions")
 local ProductCatalog = require("../data/ProductCatalog")
@@ -14,7 +12,7 @@ local HeroCollection = require("./HeroCollection")
 local PackRoller = require("./PackRoller")
 
 export type ReceiptResult = {
-	decision: Types.ReceiptDecision,
+	decision: "PurchaseGranted" | "NotProcessedYet",
 	reason: string,
 	entitlementId: string?,
 }
@@ -59,7 +57,7 @@ function PurchaseEntitlements.applyReceipt(
 	products: { Types.ProductMapping },
 	packsById: { [string]: Types.PackDefinition }?
 ): Result.Result<ReceiptResult>
-	if utf8.len(receipt.purchaseId) == nil or #receipt.purchaseId < 1 or utf8.len(receipt.playerKey) == nil then
+	if #receipt.purchaseId < 1 or #receipt.playerKey < 1 then
 		return Result.err("InvalidReceipt")
 	end
 	local existing = profile.receipts[receipt.purchaseId]
@@ -67,11 +65,7 @@ function PurchaseEntitlements.applyReceipt(
 		if existing.productId ~= receipt.productId or existing.playerKey ~= receipt.playerKey then
 			return Result.err("ReceiptConflict")
 		end
-		return Result.ok({
-			decision = "PurchaseGranted",
-			reason = "Duplicate",
-			entitlementId = existing.entitlementId,
-		})
+		return Result.ok({ decision = "PurchaseGranted", reason = "Duplicate", entitlementId = existing.entitlementId })
 	end
 	local product = findProduct(products, receipt.productId)
 	local pack = nil
@@ -79,11 +73,7 @@ function PurchaseEntitlements.applyReceipt(
 		pack = if packsById ~= nil then packsById[product.packId] else PackDefinitions.get(product.packId)
 	end
 	if product == nil or pack == nil or product.paidPurchaseAllowed ~= true or product.verification ~= "VERIFIED" or pack.verification ~= "VERIFIED" then
-		return Result.ok({
-			decision = "NotProcessedYet",
-			reason = "UnverifiedProduct",
-			entitlementId = nil,
-		})
+		return Result.ok({ decision = "NotProcessedYet", reason = "UnverifiedProduct", entitlementId = nil })
 	end
 	local entitlementId = PlayerData.issueEntitlementId(profile, "receipt", receipt.purchaseId)
 	profile.receipts[receipt.purchaseId] = {
@@ -92,23 +82,14 @@ function PurchaseEntitlements.applyReceipt(
 		playerKey = receipt.playerKey,
 		entitlementId = entitlementId,
 	}
-	table.insert(profile.unopenedPacks, {
-		id = entitlementId,
-		packId = pack.id,
-		source = "Receipt",
-		state = "Unopened",
-	})
-	return Result.ok({
-		decision = "PurchaseGranted",
-		reason = "Granted",
-		entitlementId = entitlementId,
-	})
+	table.insert(profile.unopenedPacks, { id = entitlementId, packId = pack.id, source = "Receipt", state = "Unopened" })
+	return Result.ok({ decision = "PurchaseGranted", reason = "Granted", entitlementId = entitlementId })
 end
 
 function PurchaseEntitlements.openEntitlement(
 	profile: Types.PlayerProfile,
 	entitlementId: string,
-	nextInteger: (totalWeight: number) -> number,
+	nextInteger: (number) -> number,
 	packsById: { [string]: Types.PackDefinition }?
 ): Result.Result<{ PackRoller.Roll }>
 	local index = nil
@@ -138,15 +119,8 @@ function PurchaseEntitlements.openEntitlement(
 		end
 	end
 	table.remove(profile.unopenedPacks, index)
+	profile.packsOpened += 1
 	return Result.ok(rolled.value)
-end
-
-function PurchaseEntitlements.paidRows(packId: string, paidPurchaseAllowed: boolean): CardOdds.PaidDisclosure
-	local pack = PackDefinitions.get(packId)
-	if pack == nil then
-		return { status = "Blocked", reason = "UnknownPack" }
-	end
-	return CardOdds.listPaidEligibleOutcomes(pack, paidPurchaseAllowed)
 end
 
 return PurchaseEntitlements

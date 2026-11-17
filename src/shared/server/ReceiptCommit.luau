@@ -1,6 +1,4 @@
 --!strict
--- One UpdateAsync records the receipt and the unopened entitlement together.
--- PurchaseGranted is returned only after that call finishes without error.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
@@ -9,7 +7,7 @@ local ProfileSession = require("./ProfileSession")
 local PurchaseEntitlements = require("./PurchaseEntitlements")
 
 export type CommitResult = {
-	decision: Types.ReceiptDecision,
+	decision: "PurchaseGranted" | "NotProcessedYet",
 	reason: string,
 	profile: Types.PlayerProfile?,
 }
@@ -17,11 +15,7 @@ export type CommitResult = {
 local ReceiptCommit = {}
 
 local function notProcessed(reason: string): CommitResult
-	return {
-		decision = "NotProcessedYet",
-		reason = reason,
-		profile = nil,
-	}
+	return { decision = "NotProcessedYet", reason = reason, profile = nil }
 end
 
 function ReceiptCommit.process(
@@ -56,18 +50,10 @@ function ReceiptCommit.process(
 				return nil
 			end
 			if applied.value.decision ~= "PurchaseGranted" then
-				held = {
-					decision = "NotProcessedYet",
-					reason = applied.value.reason,
-					profile = nil,
-				}
+				held = { decision = "NotProcessedYet", reason = applied.value.reason, profile = nil }
 				return nil
 			end
-			held = {
-				decision = "PurchaseGranted",
-				reason = applied.value.reason,
-				profile = PlayerData.clone(profile),
-			}
+			held = { decision = "PurchaseGranted", reason = applied.value.reason, profile = PlayerData.clone(profile) }
 			if applied.value.reason == "Duplicate" then
 				return nil
 			end
@@ -76,11 +62,7 @@ function ReceiptCommit.process(
 				held = notProcessed(validated.code)
 				return nil
 			end
-			return {
-				sessionToken = token,
-				sessionAt = now,
-				profile = validated.value,
-			}
+			return { sessionToken = token, sessionAt = now, profile = validated.value }
 		end)
 	end)
 	if not ran then

@@ -1,13 +1,13 @@
 --!strict
--- Creator Hub product id for Legendary Booster Pack. No Robux price is stored.
--- liveChargesEnabled stays false until verified per-card odds and launch QA exist.
+-- Creator Hub product for Moonlit Booster. No Robux price is stored.
+-- liveChargesEnabled stays false until verified odds and launch QA exist.
 
 local Types = require("../contracts/Types")
 
-local LEGENDARY: Types.ProductMapping = {
+local MOONLIT: Types.ProductMapping = {
 	developerProductId = 3732907303,
-	packId = "legendary.booster",
-	displayName = "Legendary Booster Pack",
+	packId = "packvania.moonlit",
+	displayName = "Moonlit Booster",
 	verification = "UNVERIFIED_PLACEHOLDER",
 	paidPurchaseAllowed = false,
 }
@@ -19,11 +19,11 @@ function ProductCatalog.liveChargesEnabled(): boolean
 end
 
 function ProductCatalog.list(): { Types.ProductMapping }
-	return { LEGENDARY }
+	return { MOONLIT }
 end
 
 function ProductCatalog.configurationGap(): string
-	return "Live Robux purchase is blocked until launch QA. Legendary weights are 1 and 1, the same as the free pack, on 2 independent slots. These are designed balance weights, not measured release odds. The 1% wildcard is not a product."
+	return "Live Robux purchase is blocked until launch QA. Moonlit weights match the Night Pack on 2 independent slots. These are designed weights, not measured release odds. Take product 3732907303 off sale in Creator Hub."
 end
 
 return ProductCatalog

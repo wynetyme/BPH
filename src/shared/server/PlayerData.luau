@@ -1,12 +1,10 @@
 --!strict
--- Serializable profile. Versioned template, no DataStore calls.
--- Future server adapter: UpdateAsync + session lock. Keys must contain the user id.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
+local CombatTables = require("../data/CombatTables")
 
 local PROFILE_VERSION = 1
-
 local PlayerData = {}
 
 local function isSafeInteger(value: unknown): boolean
@@ -24,12 +22,7 @@ local function copyProfile(profile: Types.PlayerProfile): Types.PlayerProfile
 	end
 	local unopened: { Types.UnopenedPack } = {}
 	for _, pack in profile.unopenedPacks do
-		table.insert(unopened, {
-			id = pack.id,
-			packId = pack.packId,
-			source = pack.source,
-			state = pack.state,
-		})
+		table.insert(unopened, { id = pack.id, packId = pack.packId, source = pack.source, state = pack.state })
 	end
 	local receipts: { [string]: Types.ReceiptRecord } = {}
 	for purchaseId, record in profile.receipts do
@@ -56,12 +49,21 @@ local function copyProfile(profile: Types.PlayerProfile): Types.PlayerProfile
 	for packId, open in profile.unlockedPacks do
 		unlocked[packId] = open
 	end
+	local relics: { [string]: boolean } = {}
+	for relicId, known in profile.relics do
+		relics[relicId] = known
+	end
+	local equipped: { string } = {}
+	for _, relicId in profile.equippedRelics do
+		table.insert(equipped, relicId)
+	end
+	local bestiary: { [string]: boolean } = {}
+	for enemyId, seen in profile.bestiary do
+		bestiary[enemyId] = seen
+	end
 	return {
 		version = profile.version,
-		currencies = {
-			coins = profile.currencies.coins,
-			mastery = profile.currencies.mastery,
-		},
+		currencies = { coins = profile.currencies.coins, mastery = profile.currencies.mastery },
 		collection = collection,
 		unopenedPacks = unopened,
 		receipts = receipts,
@@ -72,6 +74,11 @@ local function copyProfile(profile: Types.PlayerProfile): Types.PlayerProfile
 		realmId = profile.realmId,
 		clearedWaves = cleared,
 		unlockedPacks = unlocked,
+		relics = relics,
+		equippedRelics = equipped,
+		bestiary = bestiary,
+		packsOpened = profile.packsOpened,
+		damageDealt = profile.damageDealt,
 	}
 end
 
@@ -86,9 +93,14 @@ function PlayerData.createDefault(): Types.PlayerProfile
 		starterGrantApplied = false,
 		ranks = {},
 		placement = {},
-		realmId = "placeholder.tower",
+		realmId = CombatTables.startRealm(),
 		clearedWaves = {},
 		unlockedPacks = {},
+		relics = {},
+		equippedRelics = {},
+		bestiary = {},
+		packsOpened = 0,
+		damageDealt = 0,
 	}
 end
 
@@ -115,48 +127,14 @@ function PlayerData.validate(profile: Types.PlayerProfile): Result.Result<Types.
 	if not isSafeInteger(profile.nextEntitlementNonce) or profile.nextEntitlementNonce < 1 then
 		return Result.err("InvalidProfile")
 	end
-	if type(profile.starterGrantApplied) ~= "boolean" then
+	if not isSafeInteger(profile.packsOpened) or not isSafeInteger(profile.damageDealt) then
 		return Result.err("InvalidProfile")
 	end
-	if type(profile.realmId) ~= "string" or utf8.len(profile.realmId) == nil or #profile.realmId < 1 or #profile.realmId > 80 then
+	if type(profile.starterGrantApplied) ~= "boolean" or type(profile.realmId) ~= "string" or #profile.realmId < 1 then
 		return Result.err("InvalidProfile")
 	end
-	for cardId, rank in profile.ranks do
-		if utf8.len(cardId) == nil or not isSafeInteger(rank) or rank > 20 then
-			return Result.err("InvalidProfile")
-		end
-	end
-	local seenAnchor: { [string]: boolean } = {}
-	local seenCard: { [string]: boolean } = {}
-	for _, slot in profile.placement do
-		if utf8.len(slot.anchorId) == nil or utf8.len(slot.cardId) == nil or seenAnchor[slot.anchorId] or seenCard[slot.cardId] then
-			return Result.err("InvalidProfile")
-		end
-		seenAnchor[slot.anchorId] = true
-		seenCard[slot.cardId] = true
-	end
-	for _, waveId in profile.clearedWaves do
-		if utf8.len(waveId) == nil or #waveId < 1 then
-			return Result.err("InvalidProfile")
-		end
-	end
-	for packId, open in profile.unlockedPacks do
-		if utf8.len(packId) == nil or open ~= true then
-			return Result.err("InvalidProfile")
-		end
-	end
-	for cardId, count in profile.collection do
-		if utf8.len(cardId) == nil or not isSafeInteger(count) then
-			return Result.err("InvalidProfile")
-		end
-	end
-	for _, pack in profile.unopenedPacks do
-		if pack.state ~= "Unopened" or (pack.source ~= "Earned" and pack.source ~= "Receipt") then
-			return Result.err("InvalidProfile")
-		end
-		if utf8.len(pack.id) == nil or #pack.id < 1 then
-			return Result.err("InvalidProfile")
-		end
+	if #profile.equippedRelics > 3 then
+		return Result.err("InvalidProfile")
 	end
 	return Result.ok(profile)
 end
@@ -195,6 +173,15 @@ function PlayerData.reconcile(saved: { [string]: unknown }?): Result.Result<Type
 	if isSafeInteger(nonce) and (nonce :: number) >= 1 then
 		profile.nextEntitlementNonce = nonce :: number
 	end
+	if isSafeInteger(saved.packsOpened) then
+		profile.packsOpened = saved.packsOpened :: number
+	end
+	if isSafeInteger(saved.damageDealt) then
+		profile.damageDealt = saved.damageDealt :: number
+	end
+	if type(saved.realmId) == "string" and #saved.realmId >= 1 and #saved.realmId <= 80 then
+		profile.realmId = saved.realmId
+	end
 	local unopened = saved.unopenedPacks
 	if type(unopened) == "table" then
 		for _, entry in unopened :: { unknown } do
@@ -202,12 +189,7 @@ function PlayerData.reconcile(saved: { [string]: unknown }?): Result.Result<Type
 				local row = entry :: { [string]: unknown }
 				local source = row.source
 				if type(row.id) == "string" and type(row.packId) == "string" and row.state == "Unopened" and (source == "Earned" or source == "Receipt") then
-					table.insert(profile.unopenedPacks, {
-						id = row.id,
-						packId = row.packId,
-						source = source,
-						state = "Unopened",
-					})
+					table.insert(profile.unopenedPacks, { id = row.id, packId = row.packId, source = source, state = "Unopened" })
 				end
 			end
 		end
@@ -238,26 +220,19 @@ function PlayerData.reconcile(saved: { [string]: unknown }?): Result.Result<Type
 	end
 	local placement = saved.placement
 	if type(placement) == "table" then
-		local seenAnchor: { [string]: boolean } = {}
-		local seenCard: { [string]: boolean } = {}
 		for _, entry in placement :: { unknown } do
 			if type(entry) == "table" then
 				local row = entry :: { [string]: unknown }
-				if type(row.anchorId) == "string" and type(row.cardId) == "string" and not seenAnchor[row.anchorId] and not seenCard[row.cardId] then
-					seenAnchor[row.anchorId] = true
-					seenCard[row.cardId] = true
+				if type(row.anchorId) == "string" and type(row.cardId) == "string" then
 					table.insert(profile.placement, { anchorId = row.anchorId, cardId = row.cardId })
 				end
 			end
 		end
 	end
-	if type(saved.realmId) == "string" and #saved.realmId >= 1 and #saved.realmId <= 80 then
-		profile.realmId = saved.realmId
-	end
 	local cleared = saved.clearedWaves
 	if type(cleared) == "table" then
 		for _, waveId in cleared :: { unknown } do
-			if type(waveId) == "string" and #waveId >= 1 and #waveId <= 80 then
+			if type(waveId) == "string" and #waveId >= 1 then
 				table.insert(profile.clearedWaves, waveId)
 			end
 		end
@@ -270,33 +245,31 @@ function PlayerData.reconcile(saved: { [string]: unknown }?): Result.Result<Type
 			end
 		end
 	end
+	local relics = saved.relics
+	if type(relics) == "table" then
+		for relicId, known in relics :: { [string]: unknown } do
+			if type(relicId) == "string" and known == true then
+				profile.relics[relicId] = true
+			end
+		end
+	end
+	local equipped = saved.equippedRelics
+	if type(equipped) == "table" then
+		for _, relicId in equipped :: { unknown } do
+			if type(relicId) == "string" and #profile.equippedRelics < 3 then
+				table.insert(profile.equippedRelics, relicId)
+			end
+		end
+	end
+	local bestiary = saved.bestiary
+	if type(bestiary) == "table" then
+		for enemyId, seen in bestiary :: { [string]: unknown } do
+			if type(enemyId) == "string" and seen == true then
+				profile.bestiary[enemyId] = true
+			end
+		end
+	end
 	return PlayerData.validate(profile)
-end
-
-export type MemoryStore = {
-	load: (self: MemoryStore, userId: string) -> Result.Result<Types.PlayerProfile>,
-	save: (self: MemoryStore, userId: string, profile: Types.PlayerProfile) -> Result.Result<nil>,
-}
-
-function PlayerData.createMemoryStore(): MemoryStore
-	local rows: { [string]: Types.PlayerProfile } = {}
-	local store = {} :: MemoryStore
-	function store:load(userId: string)
-		local row = rows[userId]
-		if row == nil then
-			return Result.ok(PlayerData.createDefault())
-		end
-		return Result.ok(copyProfile(row))
-	end
-	function store:save(userId: string, profile: Types.PlayerProfile)
-		local validated = PlayerData.validate(profile)
-		if not validated.ok then
-			return validated
-		end
-		rows[userId] = copyProfile(profile)
-		return Result.ok(nil)
-	end
-	return store
 end
 
 return PlayerData

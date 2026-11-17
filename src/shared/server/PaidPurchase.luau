@@ -1,5 +1,4 @@
 --!strict
--- Paid prompt request. This never grants a pack and never reads a purchase dialog.
 
 local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")

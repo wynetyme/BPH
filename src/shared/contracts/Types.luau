@@ -1,81 +1,38 @@
 --!strict
--- Shared contracts. No Roblox services and no authoritative mutation.
-
-export type VerificationStatus = "UNVERIFIED_PLACEHOLDER" | "VERIFIED"
-
-export type CardId = string
-export type PackId = string
 
 export type CardKind = "Hero" | "Spell"
+export type VerificationStatus = "UNVERIFIED_PLACEHOLDER" | "VERIFIED"
+export type PackSource = "Earned" | "Receipt"
 
-export type CardDefinition = {
-	id: CardId,
-	kind: CardKind,
-	displayName: string,
-}
-
-export type OutcomeWeight = {
-	cardId: CardId,
+export type Outcome = {
+	cardId: string,
 	weight: number,
 }
 
-export type EarnedCost = {
-	status: VerificationStatus,
-	currency: "coins",
-	amount: number,
-}
-
 export type PackDefinition = {
-	id: PackId,
+	id: string,
 	displayName: string,
 	verification: VerificationStatus,
 	slots: number,
-	earnedCost: EarnedCost,
-	outcomes: { OutcomeWeight },
-}
-
-export type ProductMapping = {
-	developerProductId: number,
-	packId: PackId,
-	displayName: string,
-	verification: VerificationStatus,
-	paidPurchaseAllowed: boolean,
-}
-
-export type PaidPolicy = {
-	known: boolean,
-	arePaidRandomItemsRestricted: boolean,
-}
-
-export type ReceiptDecision = "PurchaseGranted" | "NotProcessedYet"
-
-export type Placement = {
-	anchorId: string,
-	cardId: CardId,
-}
-
-export type PlayerProfile = {
-	version: number,
-	currencies: {
-		coins: number,
-		mastery: number,
+	earnedCost: {
+		status: VerificationStatus,
+		currency: "coins",
+		amount: number,
 	},
-	collection: { [CardId]: number },
-	unopenedPacks: { UnopenedPack },
-	receipts: { [string]: ReceiptRecord },
-	nextEntitlementNonce: number,
-	starterGrantApplied: boolean,
-	ranks: { [CardId]: number },
-	placement: { Placement },
-	realmId: string,
-	clearedWaves: { string },
-	unlockedPacks: { [PackId]: boolean },
+	outcomes: { Outcome },
+}
+
+export type CardDefinition = {
+	id: string,
+	displayName: string,
+	kind: CardKind,
+	motif: "shield" | "chevron" | "wing" | "stone",
 }
 
 export type UnopenedPack = {
 	id: string,
-	packId: PackId,
-	source: "Earned" | "Receipt",
+	packId: string,
+	source: PackSource,
 	state: "Unopened",
 }
 
@@ -90,6 +47,44 @@ export type Receipt = {
 	purchaseId: string,
 	productId: number,
 	playerKey: string,
+}
+
+export type PaidPolicy = {
+	known: boolean,
+	arePaidRandomItemsRestricted: boolean,
+}
+
+export type ProductMapping = {
+	developerProductId: number,
+	packId: string,
+	displayName: string,
+	verification: VerificationStatus,
+	paidPurchaseAllowed: boolean,
+}
+
+export type Placement = {
+	anchorId: string,
+	cardId: string,
+}
+
+export type PlayerProfile = {
+	version: number,
+	currencies: { coins: number, mastery: number },
+	collection: { [string]: number },
+	unopenedPacks: { UnopenedPack },
+	receipts: { [string]: ReceiptRecord },
+	nextEntitlementNonce: number,
+	starterGrantApplied: boolean,
+	ranks: { [string]: number },
+	placement: { Placement },
+	realmId: string,
+	clearedWaves: { string },
+	unlockedPacks: { [string]: boolean },
+	relics: { [string]: boolean },
+	equippedRelics: { string },
+	bestiary: { [string]: boolean },
+	packsOpened: number,
+	damageDealt: number,
 }
 
 return {}

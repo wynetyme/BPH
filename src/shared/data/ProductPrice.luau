@@ -1,6 +1,4 @@
 --!strict
--- Turns a MarketplaceService product-info table into a display price.
--- The catalog does not store a Robux amount.
 
 export type PriceQuote = {
 	status: "Ready",
@@ -17,10 +15,7 @@ function ProductPrice.fromInfo(info: unknown): PriceQuote
 		return { status = "Unavailable", reason = "PriceUnavailable" }
 	end
 	local price = (info :: { [unknown]: unknown }).PriceInRobux
-	if type(price) ~= "number" or price ~= price or math.abs(price) == math.huge then
-		return { status = "Unavailable", reason = "PriceUnavailable" }
-	end
-	if price < 1 or price % 1 ~= 0 then
+	if type(price) ~= "number" or price ~= price or math.abs(price) == math.huge or price < 1 or price % 1 ~= 0 then
 		return { status = "Unavailable", reason = "PriceUnavailable" }
 	end
 	return { status = "Ready", priceInRobux = price }
