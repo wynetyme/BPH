@@ -1,0 +1,7 @@
+Read AGENTS.md and docs/PROJECT_STATE.md, and list only the tools/skills needed for THIS phase. I want a Roblox game with Booster Pack Heroes-style booster opening and optional Robux packs. First verify, don't assume:
+1. Which Roblox Studio MCP capabilities actually connect from this Cursor Agent session? Use a harmless read-only Studio inspection and show the result.
+2. Whether Rojo or Script Sync is present; if neither exists, propose the least-friction source-controlled setup with exact commands. Do NOT enable two conflicting writers.
+3. Whether `--!strict` Luau tooling, Git, Node, Rojo, testing support and installed Cursor skills are working. Report versions/errors, avoid giant logs.
+4. Establish folders in source control for shared data, server gameplay/economy, client UI and tests only where needed. Do not code game systems yet.
+5. Report PASS/FAIL/UNKNOWN for each connection, exact blockers, and update docs/PROJECT_STATE.md. Fix low-risk local setup issues that are already authorized by the existing installer, but never install unrelated dependencies or modify live monetization.
+Use Ponytail's minimal-necessary-solution practice. Avoid repetitive outputs; no giant repo dumps.

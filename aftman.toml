@@ -1,0 +1,6 @@
+# This file lists tools managed by Aftman.
+# https://github.com/LPGhatguy/aftman
+
+[tools]
+lune = "lune-org/lune@0.10.1"
+rojo = "rojo-rbx/rojo@7.7.1"
