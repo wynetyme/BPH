@@ -1,9 +1,9 @@
 # Durable project state
 
 Last verified update: 2026-11-17
-Current phase: playable Packvania loop in this repo. Live charges off. Do not publish.
-Project status: Night Pack, Moonlit Booster (blocked), courtyard and chapel waves, relics, bestiary, and a Studio courtyard are in source. This GitHub repo previously had no game code. The older local Studio place is not in this commit.
-Source-of-truth sync: `default.project.json` (Rojo). Studio was not connected here.
+Current phase: Packvania courtyard merged onto local `main` (`97d34bb`). Live charges off. Do not publish.
+Project status: Night Pack, Moonlit Booster (blocked), courtyard and chapel waves, relics, bestiary, and a Studio courtyard are the game on `main`. The older placeholder panel is in `legacy/placeholder-panel/` and is not synced. It remains in git history at `183bf50`.
+Source-of-truth sync: `default.project.json` (Rojo). Client scripts map to `StarterPlayer.StarterPlayerScripts`. This laptop has no `lune` or `rojo` on PATH. Unit tests were not re-run after the merge.
 
 ## What plays
 - Field: moon courtyard, tower, path, pads, pack pedestal. Camera looks at the tower.
@@ -20,10 +20,9 @@ Source-of-truth sync: `default.project.json` (Rojo). Studio was not connected he
 - The server returns immediately outside Studio.
 
 ## Tests actually run
-- Command: `lune run tests/run.luau`
-- Tool: lune 0.10.1
-- Result: **41 passed, 0 failed**
-- Studio play: UNTESTED in this environment. No Studio MCP session was available.
+- On the Packvania branch, before this merge: `lune run tests/run.luau` with lune 0.10.1, **41 passed, 0 failed**.
+- After the merge onto this laptop: not re-run. `lune` is not installed here.
+- Studio play of this merge: not started. Place `140088569290998` was already in Play on the previously synced source.
 
 ## Still missing
 - Phone, gamepad, and a restricted-account playtest.
@@ -32,4 +31,4 @@ Source-of-truth sync: `default.project.json` (Rojo). Studio was not connected he
 - Creator Hub: set product `3732907303` not for sale. It was on sale at 10 Robux in the last Studio check.
 
 ## Next exact action
-Sync with Rojo and play one courtyard clear in Studio. Leave live charges off. Do not publish.
+Stop the current Studio play. Serve this folder with Rojo and connect. Delete leftover `ReplicatedStorage.Client` from the old sync, then play one courtyard clear by hand. A new profile uses `Packvania_PlayerData_Studio_v1` and starts with 30 coins. Leave live charges off. Do not publish. This merge is local only until it is pushed.
