@@ -5,6 +5,28 @@ local Types = require("../contracts/Types")
 local Result = require("../contracts/Result")
 local CombatTables = require("../data/CombatTables")
 
+export type FrameEnemy = {
+	enemyId: string,
+	progress: number,
+	hp: number,
+	alive: boolean,
+}
+
+export type FrameShot = {
+	cardId: string,
+	origin: number,
+	progress: number,
+}
+
+export type Frame = {
+	tick: number,
+	towerHp: number,
+	killed: number,
+	leaked: number,
+	enemies: { FrameEnemy },
+	shots: { FrameShot },
+}
+
 export type Report = {
 	waveId: string,
 	ticks: number,
@@ -16,6 +38,7 @@ export type Report = {
 	mastery: number,
 	coins: number,
 	seed: number,
+	frames: { Frame },
 }
 
 local CombatSim = {}
@@ -53,10 +76,26 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 			at += group.spacing
 		end
 	end
-	type Enemy = { progress: number, hp: number, speed: number, leak: number, alive: boolean }
-	type Defender = { origin: number, damage: number, range: number, cooldown: number, wait: number }
+	type Enemy = {
+		enemyId: string,
+		progress: number,
+		hp: number,
+		speed: number,
+		leak: number,
+		alive: boolean,
+		corpse: boolean,
+	}
+	type Defender = {
+		cardId: string,
+		origin: number,
+		damage: number,
+		range: number,
+		cooldown: number,
+		wait: number,
+	}
 	local enemies: { Enemy } = {}
 	local defenders: { Defender } = {}
+	local frames: { Frame } = {}
 	for _, slot in profile.placement do
 		local origin = CombatTables.anchor(slot.anchorId)
 		local stats = CombatTables.card(slot.cardId)
@@ -65,6 +104,7 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 		end
 		local rank = profile.ranks[slot.cardId] or 0
 		table.insert(defenders, {
+			cardId = slot.cardId,
 			origin = origin,
 			damage = stats.damage + rank * stats.rankDamage + bonus.damage,
 			range = stats.range + bonus.range,
@@ -80,9 +120,18 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 	local ticks = 0
 	while ticks < CombatTables.maxTicks() do
 		ticks += 1
+		local shots: { FrameShot } = {}
 		while spawned <= #schedule and schedule[spawned].at <= ticks do
 			local row = schedule[spawned]
-			table.insert(enemies, { progress = 0, hp = row.hp, speed = row.speed, leak = row.leak, alive = true })
+			table.insert(enemies, {
+				enemyId = row.enemyId,
+				progress = 0,
+				hp = row.hp,
+				speed = row.speed,
+				leak = row.leak,
+				alive = true,
+				corpse = false,
+			})
 			spawned += 1
 		end
 		for _, enemy in enemies do
@@ -106,8 +155,10 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 					target.hp -= defender.damage
 					damageDealt += defender.damage
 					defender.wait = defender.cooldown
+					table.insert(shots, { cardId = defender.cardId, origin = defender.origin, progress = target.progress })
 					if target.hp <= 0 then
 						target.alive = false
+						target.corpse = true
 						killed += 1
 					end
 				end
@@ -116,10 +167,31 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 		for _, enemy in enemies do
 			if enemy.alive and enemy.progress >= CombatTables.pathLength() then
 				enemy.alive = false
+				enemy.corpse = true
 				leaked += 1
 				tower -= enemy.leak
 			end
 		end
+		local visible: { FrameEnemy } = {}
+		for _, enemy in enemies do
+			if enemy.alive or enemy.corpse then
+				table.insert(visible, {
+					enemyId = enemy.enemyId,
+					progress = enemy.progress,
+					hp = enemy.hp,
+					alive = enemy.alive,
+				})
+			end
+			enemy.corpse = false
+		end
+		table.insert(frames, {
+			tick = ticks,
+			towerHp = if tower < 0 then 0 else tower,
+			killed = killed,
+			leaked = leaked,
+			enemies = visible,
+			shots = shots,
+		})
 		local pending = spawned <= #schedule
 		local alive = false
 		for _, enemy in enemies do
@@ -154,6 +226,7 @@ function CombatSim.simulate(profile: Types.PlayerProfile, waveId: string, seed: 
 		mastery = if survived then wave.mastery else 0,
 		coins = if survived then wave.coins else 0,
 		seed = seed,
+		frames = frames,
 	})
 end
 

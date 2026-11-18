@@ -42,6 +42,16 @@ function Presentation.revealSeconds(motion: Motion): number
 	return 0.45
 end
 
+function Presentation.combatTickSeconds(motion: Motion): number
+	if motion == "reduced" then
+		return 0
+	end
+	if motion == "fast" then
+		return 0.05
+	end
+	return 0.12
+end
+
 function Presentation.buttonHeight(viewportY: number): number
 	return math.clamp(math.floor(viewportY / 16), 44, 56)
 end

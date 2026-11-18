@@ -6,6 +6,10 @@ local ProductCatalog = require("../src/shared/data/ProductCatalog")
 local PackUI = require("../src/shared/ui/PackUI")
 local Board = require("../src/shared/ui/Board")
 local Presentation = require("../src/shared/ui/Presentation")
+local StageArt = require("../src/shared/ui/StageArt")
+local CameraFeel = require("../src/shared/ui/CameraFeel")
+local CardDefinitions = require("../src/shared/data/CardDefinitions")
+local CombatTables = require("../src/shared/data/CombatTables")
 local PlayerData = require("../src/shared/server/PlayerData")
 local HeroCollection = require("../src/shared/server/HeroCollection")
 local Economy = require("../src/shared/server/Economy")
@@ -177,6 +181,75 @@ check("quests track recruits and clears", shot.quests[3].done == true)
 check("bestiary remembers the chapel", shot.bestiary[1].known or shot.bestiary[2].known or shot.bestiary[3].known)
 check("motion has a reduced step", Presentation.revealSeconds("reduced") == 0 and Presentation.buttonHeight(390) >= 44)
 check("forged wave is rejected", not RemoteContract.validateStartWave({ waveId = "packvania.wave.courtyard", damage = 99 }).ok)
+
+local scenery = StageArt.scenery()
+local function hasPiece(name: string): boolean
+	for _, item in scenery do
+		if item.name == name then
+			return item.sx > 0 and item.sy > 0 and item.sz > 0
+		end
+	end
+	return false
+end
+local shapesOk = true
+for _, item in scenery do
+	if type(item.shape) ~= "string" or type(item.material) ~= "string" then
+		shapesOk = false
+	end
+end
+check("stage has moon, tower, pack, chapel, and pads", hasPiece("Moon") and hasPiece("Tower") and hasPiece("NightPack") and hasPiece("Chapel") and hasPiece("lane.mid") and #scenery >= 24 and shapesOk)
+check("placeholder art is labeled unknown", StageArt.status() == "PLACEHOLDER" and string.find(StageArt.caption(), "UNKNOWN", 1, true) ~= nil)
+check("lane follows the combat path", StageArt.pathLength() == CombatTables.pathLength() and StageArt.laneX(0) == 40 and StageArt.laneX(StageArt.pathLength()) == -28)
+local figuresOk = true
+for _, card in CardDefinitions.list() do
+	local figure = StageArt.figure("card", card.id)
+	if #figure < 3 or figure[1].name == "Placeholder" then
+		figuresOk = false
+	end
+end
+for _, enemy in CombatTables.enemies() do
+	local figure = StageArt.figure("enemy", enemy.id)
+	if #figure < 3 or figure[1].name == "Placeholder" then
+		figuresOk = false
+	end
+end
+check("heroes and enemies have placeholder silhouettes", figuresOk)
+check("unknown art stays a placeholder", StageArt.figure("card", "no.such")[1].name == "Placeholder")
+local face = StageArt.cardFace("packvania.warden")
+check("card face names the placeholder", face.badge == "PLACEHOLDER" and face.displayName == "Grave Warden" and string.find(face.note, "UNKNOWN", 1, true) ~= nil)
+local quiet = StageArt.feedback("kill", "reduced")
+local loud = StageArt.feedback("kill", "full")
+check("reduced combat feedback is still", quiet.trauma == 0 and quiet.sparks == 0 and quiet.flash == false)
+check("a kill reads harder than a hit", loud.trauma > StageArt.feedback("hit", "full").trauma and loud.sparks > StageArt.feedback("hit", "full").sparks)
+check("moonlit lighting stays shadowless", StageArt.lighting().globalShadows == false and StageArt.lighting().ambient[1] < 200)
+CameraFeel.reset()
+CameraFeel.add(1, "reduced")
+check("reduced motion skips shake", CameraFeel.trauma() == 0)
+CameraFeel.add(0.4, "full")
+CameraFeel.add(0.4, "full")
+check("hits add trauma", CameraFeel.trauma() > 0.7)
+CameraFeel.step(1, 1)
+local restX, restY, restRoll = CameraFeel.step(0.1, 1)
+check("shake returns to center", CameraFeel.trauma() == 0 and restX == 0 and restY == 0 and restRoll == 0)
+local viewer = PlayerData.createDefault()
+HeroCollection.grant(viewer, "packvania.warden", 1)
+Progression.place(viewer, "packvania.warden", "lane.mid")
+local played = CombatSim.simulate(viewer, "packvania.wave.courtyard", 7)
+local frames = if played.ok then played.value.frames else {}
+local sawShot = false
+for _, frame in frames do
+	for _, shot in frame.shots do
+		if shot.cardId == "packvania.warden" and shot.origin == 16 then
+			sawShot = true
+		end
+	end
+end
+check(
+	"combat preview matches the sim",
+	played.ok and #frames == played.value.ticks and frames[#frames].killed == played.value.killed and frames[#frames].towerHp == played.value.towerHp and sawShot
+)
+check("combat playback can skip", Presentation.combatTickSeconds("reduced") == 0 and StageArt.playbackSeconds(frames, "reduced") == 0 and StageArt.playbackSeconds(frames, "full") > 0)
+check("night pack weights are unchanged", seen["packvania.warden"] == 2 and seen["packvania.bolt"] == 2 and seen["packvania.keeper"] == 1 and seen["packvania.gargoyle"] == 1)
 
 print(string.format("tests: %d passed, %d failed", passed, failed))
 if failed > 0 then
