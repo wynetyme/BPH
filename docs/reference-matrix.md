@@ -13,7 +13,8 @@ The Steam release is 2026-11-10; the unofficial database linked below describes 
 | Opening feel | Foil reveals, animations, collection flows | Timings and UI UNKNOWN | Capture current game footage | Measure in reference audit |
 | Heroes and spells | Upgrade abilities | Stats and rarity details UNKNOWN | Steam description | Need gameplay captures |
 | Tower defense | Monster waves threaten tower | Wave timings/stats UNKNOWN | Steam description | Need direct observations |
-| Battlefield camera | Side-on and level: base on the left, lane across the frame, no downward tilt | Exact FOV UNKNOWN | Observed presentation, requested 2026-11-17 | Packvania uses a locked 1° side camera. That degree is a flat stand-in, not a measured source FOV |
+| Battlefield camera | Side-on and level: base on the left, lane across the frame, no downward tilt | Exact FOV UNKNOWN | Observed presentation, requested 2026-11-17 | Packvania keeps a locked 8° side camera. That degree is a flat stand-in, not a measured source FOV. A 1° lens drew only sky |
+| Stage, hero, enemy, pack, and hit art | Not observed | Source-game illustrations UNKNOWN | No licensed capture | Original block silhouettes, a night-pack prop, and Roblox's built-in sparkle are PLACEHOLDER. They are not source-game art |
 | Mastery/realms | Survive for Mastery; bosses unlock realms/packs | Costs/rewards UNKNOWN | Steam description | Need direct observations |
 | Robux paid packs | Proposed Roblox extension to source game | Prices/IDs UNKNOWN | User-defined addition | Do not claim source game had these |
 
