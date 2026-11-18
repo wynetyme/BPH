@@ -5,19 +5,62 @@ local GuiService = game:GetService("GuiService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+-- Side-on, level, base on the left. A 1° lens is past Studio's draw distance and shows only sky.
+local SIDE_FOV = 8
+
+local function lockSideCamera()
+	local cam = Workspace.CurrentCamera
+	if cam == nil then
+		return
+	end
+	camera = cam
+	local center = Vector3.new(0, 22, 0)
+	local viewWidth = 100
+	local viewHeight = 54
+	local map = Workspace:FindFirstChild("Packvania")
+	if map ~= nil then
+		local centerX = map:GetAttribute("ViewCenterX")
+		local centerY = map:GetAttribute("ViewCenterY")
+		local width = map:GetAttribute("ViewWidth")
+		local height = map:GetAttribute("ViewHeight")
+		if typeof(centerX) == "number" and typeof(centerY) == "number" then
+			center = Vector3.new(centerX, centerY, 0)
+		end
+		if typeof(width) == "number" and width > 1 then
+			viewWidth = width
+		end
+		if typeof(height) == "number" and height > 1 then
+			viewHeight = height
+		end
+	end
+	cam.CameraType = Enum.CameraType.Scriptable
+	cam.FieldOfView = SIDE_FOV
+	local half = math.tan(math.rad(cam.FieldOfView * 0.5))
+	local aspect = cam.ViewportSize.X / math.max(cam.ViewportSize.Y, 1)
+	if aspect ~= aspect or aspect <= 0 then
+		aspect = 1
+	end
+	local distance = math.max((viewHeight * 0.5) / half, (viewWidth * 0.5) / (half * aspect))
+	if distance ~= distance or distance > 2000 then
+		return
+	end
+	cam.CFrame = CFrame.lookAt(center + Vector3.new(0, 0, distance), center, Vector3.new(0, 1, 0))
+	cam.Focus = CFrame.new(center)
+end
+
+RunService:BindToRenderStep("PackvaniaSideCamera", Enum.RenderPriority.Camera.Value + 1, lockSideCamera)
+lockSideCamera()
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Presentation = require(Shared:WaitForChild("ui"):WaitForChild("Presentation"))
 local ProductPrice = require(Shared:WaitForChild("data"):WaitForChild("ProductPrice"))
-
-local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
-if camera ~= nil then
-	camera.CameraType = Enum.CameraType.Scriptable
-	camera.CFrame = CFrame.new(Vector3.new(0, 34, 52), Vector3.new(0, 8, 0))
-end
 
 local remotes = ReplicatedStorage:WaitForChild("PackvaniaRemotes")
 local resultRemote = remotes:WaitForChild("PackOpenResult") :: RemoteEvent

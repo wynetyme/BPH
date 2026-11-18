@@ -17,6 +17,33 @@ if not RunService:IsStudio() then
 	return
 end
 
+-- This Studio build keeps the flag on Players. StarterPlayer.CharacterAutoLoads errors and stops the server.
+Players.CharacterAutoLoads = false
+
+local function parkCharacter(character: Model)
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root ~= nil and root:IsA("BasePart") then
+		root.Anchored = true
+		root.CFrame = CFrame.new(0, -400, 0)
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid ~= nil then
+		humanoid.PlatformStand = true
+	end
+end
+
+local function watchPlayer(player: Player)
+	player.CharacterAdded:Connect(parkCharacter)
+	if player.Character ~= nil then
+		parkCharacter(player.Character)
+	end
+end
+
+for _, player in Players:GetPlayers() do
+	watchPlayer(player)
+end
+Players.PlayerAdded:Connect(watchPlayer)
+
 local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
 local dataFolder = sharedFolder:WaitForChild("data")
 local serverFolder = sharedFolder:WaitForChild("server")
@@ -50,38 +77,70 @@ local function part(parent: Instance, name: string, size: Vector3, position: Vec
 	block.Position = position
 	block.Color = color
 	block.Material = material
+	block.CastShadow = false
 	block.TopSurface = Enum.SurfaceType.Smooth
 	block.BottomSurface = Enum.SurfaceType.Smooth
 	block.Parent = parent
 	return block
 end
 
+local function hidePlaceFloor()
+	for _, name in { "Baseplate", "SpawnLocation" } do
+		local item = Workspace:FindFirstChild(name)
+		if item ~= nil and item:IsA("BasePart") then
+			item.Transparency = 1
+			item.CastShadow = false
+		end
+	end
+end
+
+-- Side-on stage. X is the lane, Y is up, and the camera looks straight along Z.
+-- Progress 0 is the right-hand spawn. Progress 36 is the tower on the left.
+local STAGE_CENTER = Vector3.new(0, 22, 0)
+local SPAWN_X = 40
+local TOWER_X = -28
+local PATH = 36
+
+local function laneX(progress: number): number
+	return SPAWN_X + (progress / PATH) * (TOWER_X - SPAWN_X)
+end
+
+hidePlaceFloor()
 local map = Instance.new("Folder")
 map.Name = "Packvania"
+map:SetAttribute("ViewCenterX", STAGE_CENTER.X)
+map:SetAttribute("ViewCenterY", STAGE_CENTER.Y)
+map:SetAttribute("ViewWidth", 100)
+map:SetAttribute("ViewHeight", 54)
 map.Parent = Workspace
-local ground = part(map, "Courtyard", Vector3.new(140, 2, 140), Vector3.new(0, 0, 0), Color3.fromRGB(28, 24, 48), Enum.Material.Slate)
-part(map, "Path", Vector3.new(10, 0.4, 70), Vector3.new(0, 1.2, 8), Color3.fromRGB(72, 64, 102), Enum.Material.Cobblestone)
-local tower = part(map, "Tower", Vector3.new(10, 18, 10), Vector3.new(0, 10, -8), Color3.fromRGB(96, 92, 118), Enum.Material.Brick)
-part(map, "Roof", Vector3.new(12, 4, 12), Vector3.new(0, 21, -8), Color3.fromRGB(128, 48, 72), Enum.Material.Slate)
-part(map, "Door", Vector3.new(3, 5, 0.4), Vector3.new(0, 3.5, -2.8), Color3.fromRGB(214, 176, 92), Enum.Material.Neon)
-part(map, "Moon", Vector3.new(8, 8, 8), Vector3.new(-28, 36, -20), Color3.fromRGB(230, 220, 190), Enum.Material.Neon)
-for index, spot in { Vector3.new(-24, 6, 16), Vector3.new(22, 6, 18), Vector3.new(-18, 5, -24), Vector3.new(26, 7, -16) } do
-	part(map, "Cypress" .. index, Vector3.new(3, 12, 3), spot, Color3.fromRGB(36, 32, 58), Enum.Material.Slate)
+
+part(map, "Sky", Vector3.new(240, 140, 2), Vector3.new(0, 28, -8), Color3.fromRGB(18, 16, 42), Enum.Material.SmoothPlastic)
+part(map, "Hill", Vector3.new(220, 16, 2), Vector3.new(0, 14, -4), Color3.fromRGB(32, 28, 58), Enum.Material.SmoothPlastic)
+local moon = part(map, "Moon", Vector3.new(2, 9, 9), Vector3.new(28, 40, -5), Color3.fromRGB(230, 220, 190), Enum.Material.SmoothPlastic)
+moon.Shape = Enum.PartType.Cylinder
+moon.CFrame = CFrame.new(moon.Position) * CFrame.Angles(0, math.rad(90), 0)
+for index, spot in { Vector3.new(-18, 16, -2), Vector3.new(8, 15, -2), Vector3.new(30, 17, -2) } do
+	part(map, "Cypress" .. index, Vector3.new(3, 14, 2), spot, Color3.fromRGB(24, 22, 40), Enum.Material.SmoothPlastic)
 end
-local pads = { ["lane.back"] = Vector3.new(-8, 1.4, 10), ["lane.mid"] = Vector3.new(0, 1.4, 4), ["lane.front"] = Vector3.new(8, 1.4, -2) }
-for name, position in pads do
-	part(map, name, Vector3.new(4, 0.4, 4), position, Color3.fromRGB(90, 78, 130), Enum.Material.Neon)
+local ground = part(map, "Courtyard", Vector3.new(240, 18, 2), Vector3.new(0, 1, -2), Color3.fromRGB(28, 24, 48), Enum.Material.SmoothPlastic)
+part(map, "Path", Vector3.new(86, 4, 2), Vector3.new(6, 9, 0), Color3.fromRGB(72, 64, 102), Enum.Material.SmoothPlastic)
+local tower = part(map, "Tower", Vector3.new(16, 28, 2), Vector3.new(-42, 20, 1), Color3.fromRGB(96, 92, 118), Enum.Material.SmoothPlastic)
+part(map, "Roof", Vector3.new(20, 5, 2), Vector3.new(-42, 36, 1.2), Color3.fromRGB(128, 48, 72), Enum.Material.SmoothPlastic)
+part(map, "Door", Vector3.new(4, 8, 1), Vector3.new(-42, 10, 2.2), Color3.fromRGB(214, 176, 92), Enum.Material.SmoothPlastic)
+part(map, "SpawnGate", Vector3.new(3, 16, 2), Vector3.new(44, 15, 1), Color3.fromRGB(70, 54, 96), Enum.Material.SmoothPlastic)
+local pads = { ["lane.back"] = 8, ["lane.mid"] = 16, ["lane.front"] = 24 }
+for name, progress in pads do
+	part(map, name, Vector3.new(5, 8, 1.5), Vector3.new(laneX(progress), 13, 2), Color3.fromRGB(90, 78, 130), Enum.Material.SmoothPlastic)
 end
-part(map, "PackPedestal", Vector3.new(4, 2, 4), Vector3.new(16, 2, 14), Color3.fromRGB(92, 64, 48), Enum.Material.Wood)
-Lighting.ClockTime = 20.5
-Lighting.Ambient = Color3.fromRGB(48, 42, 78)
-Lighting.OutdoorAmbient = Color3.fromRGB(36, 32, 64)
-Lighting.Brightness = 1.4
+part(map, "PackPedestal", Vector3.new(6, 4, 1.5), Vector3.new(-30, 12, 2.4), Color3.fromRGB(92, 64, 48), Enum.Material.SmoothPlastic)
+Lighting.GlobalShadows = false
+Lighting.Brightness = 0
+Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+Lighting.EnvironmentDiffuseScale = 0
+Lighting.EnvironmentSpecularScale = 0
 ground.Name = "Courtyard"
 tower.Name = "Tower"
-
-local starter = game:GetService("StarterPlayer")
-starter.CharacterAutoLoads = false
 
 local remotes = ReplicatedStorage:FindFirstChild("PackvaniaRemotes")
 if remotes == nil then
