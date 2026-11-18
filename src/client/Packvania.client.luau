@@ -11,6 +11,13 @@ local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
+local cameraClock = os.clock()
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Presentation = require(Shared:WaitForChild("ui"):WaitForChild("Presentation"))
+local StageArt = require(Shared:WaitForChild("ui"):WaitForChild("StageArt"))
+local CameraFeel = require(Shared:WaitForChild("ui"):WaitForChild("CameraFeel"))
+local ProductPrice = require(Shared:WaitForChild("data"):WaitForChild("ProductPrice"))
 
 -- Side-on, level, base on the left. A 1° lens is past Studio's draw distance and shows only sky.
 local SIDE_FOV = 8
@@ -51,16 +58,18 @@ local function lockSideCamera()
 	if distance ~= distance or distance > 2000 then
 		return
 	end
-	cam.CFrame = CFrame.lookAt(center + Vector3.new(0, 0, distance), center, Vector3.new(0, 1, 0))
+	local now = os.clock()
+	local step = now - cameraClock
+	cameraClock = now
+	local motion = Presentation.parse(player:GetAttribute("PackvaniaMotion"))
+	local ox, oy, roll = CameraFeel.step(step, if motion == "reduced" then 0 else 1)
+	local base = CFrame.lookAt(center + Vector3.new(0, 0, distance), center, Vector3.new(0, 1, 0))
+	cam.CFrame = base * CFrame.new(ox, oy, 0) * CFrame.Angles(0, 0, roll)
 	cam.Focus = CFrame.new(center)
 end
 
 RunService:BindToRenderStep("PackvaniaSideCamera", Enum.RenderPriority.Camera.Value + 1, lockSideCamera)
 lockSideCamera()
-
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Presentation = require(Shared:WaitForChild("ui"):WaitForChild("Presentation"))
-local ProductPrice = require(Shared:WaitForChild("data"):WaitForChild("ProductPrice"))
 
 local remotes = ReplicatedStorage:WaitForChild("PackvaniaRemotes")
 local resultRemote = remotes:WaitForChild("PackOpenResult") :: RemoteEvent
@@ -126,7 +135,7 @@ local top = Instance.new("Frame")
 top.Name = "Top"
 top.BackgroundColor3 = panelColor
 top.BackgroundTransparency = 0.15
-top.Size = UDim2.new(1, -24, 0, 78)
+top.Size = UDim2.new(1, -24, 0, 100)
 top.Position = UDim2.fromOffset(12, 12)
 top.Parent = hud
 corner(top, 12)
@@ -139,6 +148,9 @@ local realm = label(top, "Moon Courtyard", 18, 24)
 realm.Position = UDim2.new(0.45, 0, 0, 40)
 realm.TextXAlignment = Enum.TextXAlignment.Right
 realm.Size = UDim2.new(0.5, -16, 0, 24)
+local artLabel = label(top, StageArt.caption(), 16, 22)
+artLabel.Position = UDim2.fromOffset(12, 68)
+artLabel.TextColor3 = gold
 
 local quests = Instance.new("Frame")
 quests.Name = "Quests"
@@ -327,16 +339,59 @@ if camera ~= nil then
 end
 fit()
 
-local function reveal(cardName: string, kind: string)
-	local motion = Presentation.parse(player:GetAttribute("PackvaniaMotion"))
-	showLines("Packvania", { "PACK", cardName, kind .. " · provisional", "Foil is a preview. This pack does not roll foil." })
-	if Presentation.revealSeconds(motion) > 0 then
-		task.delay(Presentation.revealSeconds(motion), function()
-			if modalTitle.Text == "Packvania" then
-				modal.Visible = false
-			end
-		end)
+local function reveal(grant: { displayName: string, kind: string, cardId: string })
+	showLines("Pack opened", {})
+	local face = StageArt.cardFace(grant.cardId)
+	local accent = Color3.fromRGB(face.ar, face.ag, face.ab)
+	local portrait = Instance.new("ViewportFrame")
+	portrait.Name = "CardPortrait"
+	portrait.BackgroundColor3 = Color3.fromRGB(face.r, face.g, face.b)
+	portrait.Size = UDim2.new(1, -12, 0, 180)
+	portrait.Ambient = Color3.fromRGB(155, 148, 170)
+	portrait.LightColor = Color3.fromRGB(255, 234, 201)
+	portrait.LightDirection = Vector3.new(-1, -1, -1)
+	portrait.Parent = body
+	corner(portrait, 12)
+	local trim = Instance.new("UIStroke")
+	trim.Color = accent
+	trim.Parent = portrait
+
+	local figure = Instance.new("Model")
+	for _, spec in StageArt.figure("card", grant.cardId) do
+		local part = Instance.new("Part")
+		part.Name = spec.name
+		part.Anchored = true
+		part.Size = Vector3.new(spec.sx, spec.sy, spec.sz)
+		part.Color = Color3.fromRGB(spec.r, spec.g, spec.b)
+		part.Transparency = spec.transparency
+		if spec.shape == "Ball" then
+			part.Shape = Enum.PartType.Ball
+		elseif spec.shape == "Cylinder" then
+			part.Shape = Enum.PartType.Cylinder
+		end
+		part.CFrame = CFrame.new(spec.x, spec.y, spec.z) * CFrame.Angles(0, math.rad(spec.ry), 0)
+		part.Parent = figure
 	end
+	figure.Parent = portrait
+	local bounds, size = figure:GetBoundingBox()
+	local lens = Instance.new("Camera")
+	lens.FieldOfView = 32
+	local distance = size.Magnitude * 0.55 / math.sin(math.rad(lens.FieldOfView / 2))
+	lens.CFrame = CFrame.lookAt(bounds.Position + Vector3.new(0.32, 0.12, 1).Unit * distance, bounds.Position)
+	lens.Parent = portrait
+	portrait.CurrentCamera = lens
+	local name = label(body, grant.displayName, 26, 38)
+	name.Font = Enum.Font.GothamBlack
+	name.LayoutOrder = 1
+	local kind = label(body, grant.kind, 18, 28)
+	kind.TextColor3 = accent
+	kind.LayoutOrder = 2
+	local note = label(body, "PLACEHOLDER. Source-game card art is UNKNOWN.", 16, 36)
+	note.LayoutOrder = 3
+	local foil = label(body, "Foil is a preview. This pack does not roll foil.", 16, 36)
+	foil.LayoutOrder = 4
+	bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	body.CanvasPosition = Vector2.zero
 end
 
 resultRemote.OnClientEvent:Connect(function(body)
@@ -347,13 +402,24 @@ resultRemote.OnClientEvent:Connect(function(body)
 		paint(body.snapshot)
 	end
 	if body.reveal ~= nil then
-		reveal(body.reveal.displayName, body.reveal.kind)
+		reveal(body.reveal)
 		status.Text = "Opened " .. body.reveal.displayName
 		return
 	end
 	if body.kind == "combat" and body.resultLines ~= nil then
-		showLines(if body.ok then "CLEARED" else "DEFEATED", body.resultLines)
+		local motion = Presentation.parse(player:GetAttribute("PackvaniaMotion"))
+		local seconds = if type(body.preview) == "table" then StageArt.playbackSeconds(body.preview, motion) else 0
+		local heading = if body.ok then "CLEARED" else "DEFEATED"
+		local lines = body.resultLines
 		status.Text = if body.ok then "The tower held." else "The tower fell."
+		local function showResult()
+			showLines(heading, lines)
+		end
+		if seconds > 0 then
+			task.delay(seconds, showResult)
+		else
+			showResult()
+		end
 		return
 	end
 	if body.kind == "paid" then

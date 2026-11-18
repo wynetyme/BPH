@@ -63,6 +63,7 @@ local ReceiptCommit = require(serverFolder:WaitForChild("ReceiptCommit"))
 local PurchaseEntitlements = require(serverFolder:WaitForChild("PurchaseEntitlements"))
 local RunCombat = require(serverFolder:WaitForChild("RunCombat"))
 local Progression = require(serverFolder:WaitForChild("Progression"))
+local StageArt = require(uiFolder:WaitForChild("StageArt"))
 
 local validated = PackDefinitions.validateShipping()
 if not validated.ok then
@@ -95,52 +96,100 @@ local function hidePlaceFloor()
 end
 
 -- Side-on stage. X is the lane, Y is up, and the camera looks straight along Z.
--- Progress 0 is the right-hand spawn. Progress 36 is the tower on the left.
-local STAGE_CENTER = Vector3.new(0, 22, 0)
-local SPAWN_X = 40
-local TOWER_X = -28
-local PATH = 36
-
-local function laneX(progress: number): number
-	return SPAWN_X + (progress / PATH) * (TOWER_X - SPAWN_X)
-end
-
+-- Art is original placeholder geometry. Source-game illustrations are UNKNOWN.
 hidePlaceFloor()
+local view = StageArt.view()
 local map = Instance.new("Folder")
 map.Name = "Packvania"
-map:SetAttribute("ViewCenterX", STAGE_CENTER.X)
-map:SetAttribute("ViewCenterY", STAGE_CENTER.Y)
-map:SetAttribute("ViewWidth", 100)
-map:SetAttribute("ViewHeight", 54)
+map:SetAttribute("ViewCenterX", view.centerX)
+map:SetAttribute("ViewCenterY", view.centerY)
+map:SetAttribute("ViewWidth", view.width)
+map:SetAttribute("ViewHeight", view.height)
+map:SetAttribute("ArtStatus", StageArt.status())
+map:SetAttribute("SourceArt", "UNKNOWN")
 map.Parent = Workspace
 
-part(map, "Sky", Vector3.new(240, 140, 2), Vector3.new(0, 28, -8), Color3.fromRGB(18, 16, 42), Enum.Material.SmoothPlastic)
-part(map, "Hill", Vector3.new(220, 16, 2), Vector3.new(0, 14, -4), Color3.fromRGB(32, 28, 58), Enum.Material.SmoothPlastic)
-local moon = part(map, "Moon", Vector3.new(2, 9, 9), Vector3.new(28, 40, -5), Color3.fromRGB(230, 220, 190), Enum.Material.SmoothPlastic)
-moon.Shape = Enum.PartType.Cylinder
-moon.CFrame = CFrame.new(moon.Position) * CFrame.Angles(0, math.rad(90), 0)
-for index, spot in { Vector3.new(-18, 16, -2), Vector3.new(8, 15, -2), Vector3.new(30, 17, -2) } do
-	part(map, "Cypress" .. index, Vector3.new(3, 14, 2), spot, Color3.fromRGB(24, 22, 40), Enum.Material.SmoothPlastic)
+local function color3(channels: { number }): Color3
+	return Color3.fromRGB(channels[1], channels[2], channels[3])
 end
-local ground = part(map, "Courtyard", Vector3.new(240, 18, 2), Vector3.new(0, 1, -2), Color3.fromRGB(28, 24, 48), Enum.Material.SmoothPlastic)
-part(map, "Path", Vector3.new(86, 4, 2), Vector3.new(6, 9, 0), Color3.fromRGB(72, 64, 102), Enum.Material.SmoothPlastic)
-local tower = part(map, "Tower", Vector3.new(16, 28, 2), Vector3.new(-42, 20, 1), Color3.fromRGB(96, 92, 118), Enum.Material.SmoothPlastic)
-part(map, "Roof", Vector3.new(20, 5, 2), Vector3.new(-42, 36, 1.2), Color3.fromRGB(128, 48, 72), Enum.Material.SmoothPlastic)
-part(map, "Door", Vector3.new(4, 8, 1), Vector3.new(-42, 10, 2.2), Color3.fromRGB(214, 176, 92), Enum.Material.SmoothPlastic)
-part(map, "SpawnGate", Vector3.new(3, 16, 2), Vector3.new(44, 15, 1), Color3.fromRGB(70, 54, 96), Enum.Material.SmoothPlastic)
-local pads = { ["lane.back"] = 8, ["lane.mid"] = 16, ["lane.front"] = 24 }
-for name, progress in pads do
-	part(map, name, Vector3.new(5, 8, 1.5), Vector3.new(laneX(progress), 13, 2), Color3.fromRGB(90, 78, 130), Enum.Material.SmoothPlastic)
+
+local function placePiece(parent: Instance, spec, ox: number, oy: number, oz: number): Part
+	local pos = Vector3.new(spec.x + ox, spec.y + oy, spec.z + oz)
+	local material = Enum.Material.SmoothPlastic
+	if spec.material == "Neon" then
+		material = Enum.Material.Neon
+	elseif spec.material == "Slate" then
+		material = Enum.Material.Slate
+	end
+	local block = part(parent, spec.name, Vector3.new(spec.sx, spec.sy, spec.sz), pos, Color3.fromRGB(spec.r, spec.g, spec.b), material)
+	block.Transparency = spec.transparency
+	block.CanCollide = false
+	block.CanQuery = false
+	block.CanTouch = false
+	if spec.shape == "Cylinder" then
+		block.Shape = Enum.PartType.Cylinder
+	elseif spec.shape == "Ball" then
+		block.Shape = Enum.PartType.Ball
+	end
+	if spec.shape ~= "Block" or spec.ry ~= 0 then
+		block.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(spec.ry), 0)
+	end
+	if spec.light ~= nil then
+		local glow = Instance.new("PointLight")
+		glow.Brightness = spec.light.brightness
+		glow.Range = spec.light.range
+		glow.Color = Color3.fromRGB(spec.light.r, spec.light.g, spec.light.b)
+		glow.Parent = block
+	end
+	block:SetAttribute("ArtStatus", StageArt.status())
+	block:SetAttribute("SourceArt", "UNKNOWN")
+	return block
 end
-part(map, "PackPedestal", Vector3.new(6, 4, 1.5), Vector3.new(-30, 12, 2.4), Color3.fromRGB(92, 64, 48), Enum.Material.SmoothPlastic)
-Lighting.GlobalShadows = false
-Lighting.Brightness = 0
-Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+
+for _, spec in StageArt.scenery() do
+	placePiece(map, spec, 0, 0, 0)
+end
+
+local actors = Instance.new("Folder")
+actors.Name = "Actors"
+actors.Parent = map
+
+local function refreshActors(player: Player, profile: any)
+	for _, child in actors:GetChildren() do
+		if child:GetAttribute("UserId") == player.UserId then
+			child:Destroy()
+		end
+	end
+	local holder = Instance.new("Model")
+	holder.Name = "Roster"
+	holder:SetAttribute("UserId", player.UserId)
+	holder:SetAttribute("ArtStatus", StageArt.status())
+	holder.Parent = actors
+	for _, slot in profile.placement do
+		local x = StageArt.anchorX(slot.anchorId)
+		if x ~= nil then
+			for _, spec in StageArt.figure("card", slot.cardId) do
+				placePiece(holder, spec, x, StageArt.feetY(), 0)
+			end
+			local rank = profile.ranks[slot.cardId] or 0
+			for _, spec in StageArt.rankPips(rank) do
+				placePiece(holder, spec, x, StageArt.feetY(), 0)
+			end
+		end
+	end
+end
+
+local lit = StageArt.lighting()
+Lighting.GlobalShadows = lit.globalShadows
+Lighting.Brightness = lit.brightness
+Lighting.ClockTime = lit.clockTime
+Lighting.FogStart = lit.fogStart
+Lighting.FogEnd = lit.fogEnd
+Lighting.FogColor = color3(lit.fog)
+Lighting.Ambient = color3(lit.ambient)
+Lighting.OutdoorAmbient = color3(lit.outdoor)
 Lighting.EnvironmentDiffuseScale = 0
 Lighting.EnvironmentSpecularScale = 0
-ground.Name = "Courtyard"
-tower.Name = "Tower"
 
 local remotes = ReplicatedStorage:FindFirstChild("PackvaniaRemotes")
 if remotes == nil then
@@ -246,6 +295,7 @@ local function loadPlayer(player: Player)
 	local policy = readPolicy(player)
 	policies[player] = policy
 	sessions[player] = { token = token, key = key, profile = loaded.value }
+	refreshActors(player, loaded.value)
 	send(player, { ok = true, snapshot = Board.snapshot(loaded.value, policy) })
 	print("Packvania loaded", player.UserId, "coins", loaded.value.currencies.coins, "policyKnown", policy.known)
 end
@@ -254,6 +304,11 @@ local function releasePlayer(player: Player)
 	local session = sessions[player]
 	policies[player] = nil
 	sessions[player] = nil
+	for _, child in actors:GetChildren() do
+		if child:GetAttribute("UserId") == player.UserId then
+			child:Destroy()
+		end
+	end
 	if session == nil then
 		return
 	end
@@ -362,6 +417,7 @@ placeRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
+	refreshActors(player, session.profile)
 	send(player, { ok = true, code = "Placed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 end)
 
@@ -395,6 +451,7 @@ waveRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 		kind = "combat",
 		code = if report.survived then "TowerSurvived" else "TowerFell",
 		resultLines = Board.resultLines(session.profile, report),
+		preview = report.frames,
 		snapshot = Board.snapshot(session.profile, policyOf(player)),
 	})
 end)
@@ -422,6 +479,7 @@ upgradeRemote.OnServerEvent:Connect(function(player: Player, payload: unknown)
 		send(player, { ok = false, code = "StoreFailed", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 		return
 	end
+	refreshActors(player, session.profile)
 	send(player, { ok = true, code = "Upgraded", snapshot = Board.snapshot(session.profile, policyOf(player)) })
 end)
 
